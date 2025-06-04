@@ -5,9 +5,9 @@
 ------
 
 <div align="center">
-  <img src="https://avatars.githubusercontent.com/drestrepoj06" width="100" style="border-radius:50%"/>
-  <img src="https://avatars.githubusercontent.com/fyan1024" width="100" style="border-radius:50%"/>
-  <img src="https://avatars.githubusercontent.com/ThijsVons" width="100" style="border-radius:50%"/>
+  <img src="https://avatars.githubusercontent.com/drestrepoj06" width="50" style="border-radius:50%"/>
+  <img src="https://avatars.githubusercontent.com/fyan1024" width="50" style="border-radius:50%"/>
+  <img src="https://avatars.githubusercontent.com/ThijsVons" width="50" style="border-radius:50%"/>
 </div>
 
 
