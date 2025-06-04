@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="resources/rcop-logo.png" width="600"/>
+  <img src="resources/rcop-logo.png" width="500"/>
 </div>
 
 ------
