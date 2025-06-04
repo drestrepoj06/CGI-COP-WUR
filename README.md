@@ -10,6 +10,8 @@
   <img src="https://avatars.githubusercontent.com/ThijsVons" width="50" style="border-radius:50%"/>
   <img src="https://avatars.githubusercontent.com/FalcoWolf1212" width="50" style="border-radius:50%"/>
 </div>
+Apparently Máté, John, Xiaolu are working on the back end.
+
 
 
 ## Introduction
@@ -19,4 +21,3 @@ RCOP is an open source Rail Common Operation Picture toolbox based on a series o
 
 # CGI-COP-WUR
 >Repository for the CGI COP project
->
