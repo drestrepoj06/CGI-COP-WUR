@@ -1,2 +1,6 @@
 streamlit
 plotly
+pandas
+numpy
+pydeck
+geopandas
