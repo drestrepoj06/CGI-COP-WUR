@@ -6,7 +6,7 @@ from pprint import pprint
 consumer = KafkaConsumer(
     'sim-vehicle',
     bootstrap_servers=["kafka:9092"],  # Match internal listener
-    api_version=("2.8.0"),
+    api_version=("3.0.0"),
     auto_offset_reset='earliest',
     value_deserializer=lambda x: json.loads(x.decode('utf-8'))
 )

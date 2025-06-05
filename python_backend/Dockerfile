@@ -9,4 +9,4 @@ COPY . .
 
 RUN ls -l /backend
 
-ENTRYPOINT ["python", "main.py"] N
+ENTRYPOINT ["python", "main.py"]

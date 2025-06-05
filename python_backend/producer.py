@@ -15,7 +15,8 @@ def serializer(message):
 
 # Create Kafka producer instance (use your kafka address here)
 producer = KafkaProducer(
-    bootstrap_servers=['kafka:9092'],  # Or localhost:9092, adjust for your environment
+    bootstrap_servers=["kafka:9092"],  
+    api_version=("3.0.0"),
     value_serializer=serializer
 )
 
@@ -38,20 +39,24 @@ def produce_train_messages():
             for entry in train_logs:
                 timestamp = parse_timestamp(entry['timestamp'])
                 for train in entry['trains']:
-                    message = {
-                        "timestamp": timestamp,
-                        "type": "train",
-                        "vehicle_id": str(train.get("ritId", train.get("treinNummer"))),
-                        "train_number": train.get("treinNummer"),
-                        "speed": train.get("snelheid"),
-                        "direction": train.get("richting"),
-                        "latitude": train.get("lat"),
-                        "longitude": train.get("lng"),
-                        "train_type": train.get("type"),
-                        "source": train.get("bron")
-                    }
+                    # message = {
+                    #     "timestamp": timestamp,
+                    #     "type": "train",
+                    #     "vehicle_id": str(train.get("ritId", train.get("treinNummer"))),
+                    #     "train_number": train.get("treinNummer"),
+                    #     "speed": train.get("snelheid"),
+                    #     "direction": train.get("richting"),
+                    #     "latitude": train.get("lat"),
+                    #     "longitude": train.get("lng"),
+                    #     "train_type": train.get("type"),
+                    #     "source": train.get("bron")
+                    # }
+
+                    message = {"key": "value"}
                     logging.info(f"Sending train data: {message}")
                     producer.send('train-locations', message)
+                    logging.info("train-locations' message sent successfully!")
+
                 producer.flush()
                 time.sleep(5)  # Wait 5 seconds between batches
     except Exception as e:
@@ -71,7 +76,7 @@ def get_route_from_tomtom(origin, destination, traffic=True):
     base_url = "https://api.tomtom.com/routing/1/calculateRoute"
     origin_str = f"{origin[0]},{origin[1]}"
     destination_str = f"{destination[0]},{destination[1]}"
-    traffic_mode = "traffic:enabled" if traffic else "traffic:disabled"
+    traffic_mode = "true" if traffic else "false"
 
     url = (
         f"{base_url}/{origin_str}:{destination_str}/json"
@@ -81,7 +86,7 @@ def get_route_from_tomtom(origin, destination, traffic=True):
         f"&traffic={traffic_mode}"
         f"&computeBestOrder=false"
         f"&sectionType=travelMode"
-        f"&instructionType=text"
+        f"&instructionsType=text"
         f"&report=effectiveSettings"
     )
 
@@ -108,23 +113,26 @@ def produce_vehicle_messages():
                 origin = vehicle_data['location'][0]
                 route = get_route_from_tomtom(origin, destination, traffic=True)
                 if route:
-                    message = {
-                        "timestamp": int(time.time() * 1000),
-                        "type": "vehicle",
-                        "vehicle_id": vehicle_id,
-                        "mode": vehicle_data['mode'],
-                        "speed": vehicle_data['speed'],
-                        "origin": origin,
-                        "destination": destination,
-                        "route_summary": {
-                            "lengthInMeters": route["lengthInMeters"],
-                            "travelTimeInSeconds": route["travelTimeInSeconds"],
-                            "trafficDelayInSeconds": route["trafficDelayInSeconds"],
-                        },
-                        "route_geometry": route["geometry"]
-                    }
+                    message = {"key": "value"}
+                    # message = {
+                    #     "timestamp": int(time.time() * 1000),
+                    #     "type": "vehicle",
+                    #     "vehicle_id": vehicle_id,
+                    #     "mode": vehicle_data['mode'],
+                    #     "speed": vehicle_data['speed'],
+                    #     "origin": origin,
+                    #     "destination": destination,
+                    #     "route_summary": {
+                    #         "lengthInMeters": route["lengthInMeters"],
+                    #         "travelTimeInSeconds": route["travelTimeInSeconds"],
+                    #         "trafficDelayInSeconds": route["trafficDelayInSeconds"],
+                    #     },
+                    #     "route_geometry": route["geometry"]
+                    # }
+
                     logging.info(f"Sending vehicle route data: {message}")
-                    producer.send('sim-vehicle', message)
+                    producer.send('sim-tomtom-vehicle', message)
+                    logging.info("sim-tomtom-vehicle' message sent successfully!")
                 else:
                     logging.warning(f"Skipping message for {vehicle_id} due to route fetch failure.")
             producer.flush()
@@ -135,6 +143,24 @@ def produce_vehicle_messages():
 # --- Main: start both producers in threads ---
 
 def main():
+    # def test_producer():
+    #     try:
+    #         producer = KafkaProducer(
+    #             bootstrap_servers=['kafka:9092'],
+    #             api_version=("2.8.0"),
+    #             value_serializer=lambda x: json.dumps(x).encode('utf-8')
+    #         )
+    #         message = {"key": "value"}
+    #         logging.info(f"Sending test-producer data: {message}")
+    #         producer.send('test-topic-producer', message)
+    #         producer.flush()
+    #         logging.info("Test message sent successfully!")
+    #     except Exception as e:
+    #         logging.error(f"Test producer failed: {e}")
+
+    # # Call this function before starting producers
+    # test_producer()
+
     train_thread = threading.Thread(target=produce_train_messages, daemon=True)
     vehicle_thread = threading.Thread(target=produce_vehicle_messages, daemon=True)
 
