@@ -11,7 +11,7 @@
   <img src="https://avatars.githubusercontent.com/FalcoWolf1212" width="50" style="border-radius:50%"/>
   <img src="https://avatars.githubusercontent.com/matetorok1" width="50" style="border-radius:50%"/>
 </div>
-Apparently Máté, John, Xiaolu are working on the back end.
+Apparently Máté, John, Xiaolu are working on the backend, while Falco and Thijs are working on the frontend.
 
 
 
