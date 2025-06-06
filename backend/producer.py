@@ -18,6 +18,10 @@ TOPICS = ['train-locations', 'ambulance-locations']
 
 TRAIN_LOGS_PATH = 'utils/train_logs.json'
 AMB_LOGS_PATH = 'utils/ambulance_logs.json'
+TOPICS = ['train-locations', 'ambulance-locations']
+
+TRAIN_LOGS_PATH = 'utils/train_logs.json'
+AMB_LOGS_PATH = 'utils/ambulance_logs.json'
 
 def create_kafka_admin(max_retries=5, retry_interval=5):
     """Create Kafka admin client with retry mechanism"""
@@ -42,8 +46,10 @@ def ensure_topics_exist(admin_client=None):
         if admin_client is None:
             admin_client = create_kafka_admin()
 
+
         existing_topics = admin_client.list_topics()
         topics_to_create = [t for t in TOPICS if t not in existing_topics]
+
 
         if topics_to_create:
             topic_list = [NewTopic(topic, num_partitions=1, replication_factor=1) for topic in topics_to_create]
@@ -51,6 +57,7 @@ def ensure_topics_exist(admin_client=None):
             logging.info(f"✅ Created {len(topic_list)} topics: {', '.join(topics_to_create)}")
         else:
             logging.info(f"ℹ️ All topics already exist: {', '.join(TOPICS)}")
+
 
     except TopicAlreadyExistsError:
         logging.info(f"ℹ️ Topics already exist: {', '.join(TOPICS)}")
@@ -60,6 +67,35 @@ def ensure_topics_exist(admin_client=None):
     finally:
         if admin_client:
             admin_client.close()
+
+def parse_timestamp(ts_str):
+    """Convert ISO timestamp string to milliseconds since epoch."""
+    dt = datetime.fromisoformat(ts_str)
+    return int(dt.timestamp() * 1000)
+
+def load_train_logs():
+    """Load train log data from JSON file"""
+    try:
+        with open(TRAIN_LOGS_PATH, 'r') as f:
+            data = json.load(f)
+            logging.info(f"Loaded {len(data)} train log entries.")
+            return data
+    except Exception as e:
+        logging.error(f"Failed to load train logs: {e}")
+        return []
+
+def load_ambulance_logs():
+    """Load ambulance log data from JSON file."""
+    try:
+        with open(AMB_LOGS_PATH, 'r') as f:
+            data = json.load(f)
+            logging.info(f"Loaded {len(data)} ambulance log entries.")
+            return data
+    except Exception as e:
+        logging.error(f"Failed to load ambulance logs: {e}")
+        return []
+
+
 
 def parse_timestamp(ts_str):
     """Convert ISO timestamp string to milliseconds since epoch."""
@@ -123,7 +159,7 @@ def produce_train_messages():
                 producer.send('train-locations', value=message)
             producer.flush()
             logging.info(f"✅ Data for timestamp {timestamp} has been sent successfully")
-            time.sleep(1)  # Optional delay between batches
+            time.sleep(5)  # Optional delay between batches
 
     except Exception as e:
         logging.error(f"🚨 Train producer error: {e}")
@@ -175,8 +211,6 @@ def produce_ambulance_messages():
         logging.error(f"🚨 Ambulance producer error: {e}")
     finally:
         producer.close()
-
-
 
 def main():
     try:
