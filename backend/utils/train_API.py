@@ -11,7 +11,7 @@ MAX_DIST_m = 10000
 headers = {
     "Ocp-Apim-Subscription-Key": API_KEY
 }
-SAVE_PATH = "trains_log.json"
+SAVE_PATH = "train_logs.json"
 duration_minutes = 10
 interval_seconds = 5
 end_time = time.time() + duration_minutes * 60
