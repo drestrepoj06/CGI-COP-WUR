@@ -125,12 +125,17 @@ def parse_timestamp(ts_str):
     return int(dt.timestamp() * 1000)
 
 def produce_train_messages(producer):
-    """Produce train location messages"""
+    """Produce train location messages in batches based on timestamps"""
     try:
         while True:
-            train_logs = load_train_logs()
+            train_logs = load_train_logs()  # Load train logs
+            timestamp_groups = {}  # Dictionary to store messages grouped by timestamp
+
+            # Group train data by timestamp
             for entry in train_logs:
                 timestamp = parse_timestamp(entry['timestamp'])
+                if timestamp not in timestamp_groups:
+                    timestamp_groups[timestamp] = []
                 for train in entry['trains']:
                     message = {
                         "timestamp": timestamp,
@@ -141,13 +146,20 @@ def produce_train_messages(producer):
                         "speed": train['snelheid'],
                         "direction": train['richting']
                     }
-                    logging.info(f"Sending train data: {message}")
-                    producer.send('train-locations', message)
-                    logging.info("'train-locations' message sent successfully!")
-                producer.flush()
-                time.sleep(5)
+                    timestamp_groups[timestamp].append(message)
+
+            # Send messages in batches every 5 seconds
+            for timestamp, messages in timestamp_groups.items():
+                for message in messages:
+                    logging.info(f"📤 Sending train data: {message}")
+                    producer.send('train-locations', value=message)
+                
+                producer.flush()  # Ensure all messages are sent
+                logging.info(f"✅ Data for timestamp {timestamp} has been sent successfully")
+                time.sleep(5)  # Wait 5 seconds before sending the next batch
+
     except Exception as e:
-        logging.error(f"Train producer error: {e}")
+        logging.error(f"🚨 Train producer error: {e}")
 
 
 # def get_route_from_tomtom(origin, destination, traffic=True):
