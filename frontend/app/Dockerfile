@@ -5,6 +5,7 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+COPY animated_map.html .
 COPY . .
 
 CMD ["python", "main.py"]
