@@ -36,3 +36,6 @@ services:
     working_dir: /app
     volumes:
       - ./train_location_data:/app/train_location_data
+      - ./ambulance_location_data:/app/ambulance_location_data
+
+      
