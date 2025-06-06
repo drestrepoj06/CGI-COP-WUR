@@ -167,7 +167,7 @@ def main():
             if msg_timestamp != current_timestamp:
                 logging.info(f"Switching to new timestamp: {msg_timestamp}")
                 # Write the current group's data to file before switching timestamp groups
-                # write_geodf_to_file(current_geodf, current_timestamp)
+                write_geodf_to_file(current_geodf, current_timestamp)
                 # logging.info(f"Writing current group to file: {current_timestamp}")
                 # logging.info(f"Current group (timestamp {current_timestamp}) now has {len(current_geodf)} records")
                 # Reset the GeoDataFrame and set the new current timestamp
@@ -195,8 +195,8 @@ def main():
         consumer.close()
         logging.info("Consumer shutdown complete.")
         # Write out the last group if it exists
-        # if current_timestamp is not None and len(current_geodf) > 0:
-        #     write_geodf_to_file(current_geodf, current_timestamp)
+        if current_timestamp is not None and len(current_geodf) > 0:
+            write_geodf_to_file(current_geodf, current_timestamp)
 
 
 if __name__ == "__main__":
