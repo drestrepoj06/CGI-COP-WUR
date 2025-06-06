@@ -1,38 +1,59 @@
 import streamlit as st
 import json
+import os
 import pandas as pd
+from glob import glob
 
 st.set_page_config(layout="wide")
-st.title("Animated Route with Custom Leaflet + JavaScript")
-
-# Load TomTom route
-with open("UtrechtTomTomRoute.json") as f:
-    data = json.load(f)
-
-points = data['routes'][0]['legs'][0]['points']
-points_df = pd.DataFrame(points)
+st.title("Live Train Animation Map")
 
 # Load rails GeoJSON
 with open("rails.geojson", "r") as f:
     rails_geojson = json.load(f)
-
-# Convert to JSON string (JavaScript-friendly)
 rails_js = json.dumps(rails_geojson)
 
-# Save coordinates for JS
-route = [(pt['latitude'], pt['longitude']) for pt in points]
-st.session_state['route'] = route  # Optional: if needed later
 
-# Write route to JS file
+# Load and sort all train location files
+train_files = sorted(
+    glob("data/train_location_data/*.json"),
+    key=lambda f: int(os.path.basename(f).replace(".json", ""))
+)
+
+# Parse all train points, keyed by timestamp
+train_data = []
+timestamps = []
+
+for file in train_files:
+    timestamp = int(os.path.basename(file).replace(".json", ""))
+    with open(file, "r") as f:
+        geojson = json.load(f)
+
+    features = [
+        {
+            "lat": f["geometry"]["coordinates"][1],
+            "lon": f["geometry"]["coordinates"][0],
+            "ritId": f["properties"]["ritId"],
+            "speed": f["properties"]["speed"],
+            "type": f["properties"]["type"]
+        }
+        for f in geojson["features"]
+    ]
+
+    train_data.append({
+        "timestamp": timestamp,
+        "features": features
+    })
+    timestamps.append(timestamp)
+
+# Prepare JS-friendly object
+train_js_data = json.dumps(train_data)
+
+# Inject into HTML
 with open("animated_map.html", "r") as f:
     html = f.read()
 
-# Inject coordinates into placeholder in the HTML
-coord_js = str(route).replace("(", "[").replace(")", "]")  # JS-friendly format
-html = html.replace("//__INSERT_ROUTE_HERE__", f"const route = {coord_js};")
-
-# Inject rails data
+html = html.replace("//__INSERT_TRAIN_DATA_HERE__", f"const trainData = {train_js_data};")
 html = html.replace("//__INSERT_RAILS_HERE__", f"const railsData = {rails_js};")
 
-# Show the custom animated map
-st.components.v1.html(html, height=600, scrolling=False)
+# Show the animated map
+st.components.v1.html(html, height=700, scrolling=False)
