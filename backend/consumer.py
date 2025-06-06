@@ -129,7 +129,7 @@ def write_geodf_to_file(geodf, timestamp):
         # Ensure the output directory exists
         os.makedirs(OUTPUT_FOLDER, exist_ok=True)
         # Build the file path
-        file_path = os.path.join(OUTPUT_FOLDER, f"{timestamp}.geojson")
+        file_path = os.path.join(OUTPUT_FOLDER, f"{timestamp}.json")
         # Write the GeoDataFrame to a GeoJSON file
         geodf.to_file(file_path, driver="GeoJSON")
         logging.info(f"GeoDataFrame for timestamp {timestamp} saved to '{file_path}'")
@@ -167,7 +167,7 @@ def main():
             if msg_timestamp != current_timestamp:
                 logging.info(f"Switching to new timestamp: {msg_timestamp}")
                 # Write the current group's data to file before switching timestamp groups
-                write_geodf_to_file(current_geodf, current_timestamp)
+                # write_geodf_to_file(current_geodf, current_timestamp)
                 # logging.info(f"Writing current group to file: {current_timestamp}")
                 # logging.info(f"Current group (timestamp {current_timestamp}) now has {len(current_geodf)} records")
                 # Reset the GeoDataFrame and set the new current timestamp
@@ -177,8 +177,12 @@ def main():
             # Update the current GeoDataFrame with the new message
             current_geodf = update_geodf(current_geodf, msg)
             
+            # current_geodf should be the train_location_data file for frontend 
+            # updates every 5 seconds
+
+
             # Log the number of records in the current GeoDataFrame
-            logging.info(f"Current group (timestamp {current_timestamp}) now has {len(current_geodf)} records")
+            # logging.info(f"Current group (timestamp {current_timestamp}) now has {len(current_geodf)} records")
             
             # Optionally, you can flush data periodically; here we check every record and sleep briefly
             time.sleep(0.1)
@@ -191,8 +195,8 @@ def main():
         consumer.close()
         logging.info("Consumer shutdown complete.")
         # Write out the last group if it exists
-        if current_timestamp is not None and len(current_geodf) > 0:
-            write_geodf_to_file(current_geodf, current_timestamp)
+        # if current_timestamp is not None and len(current_geodf) > 0:
+        #     write_geodf_to_file(current_geodf, current_timestamp)
 
 
 if __name__ == "__main__":
