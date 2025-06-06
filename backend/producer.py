@@ -1,37 +1,32 @@
-from kafka import KafkaAdminClient, KafkaProducer
-from kafka.admin import NewTopic
-from kafka.errors import KafkaError, TopicAlreadyExistsError
 import time
 import sys
-
-
 import json
 import logging
 import requests
 import threading
 from datetime import datetime
 
-# Kafka 配置
-# KAFKA_BROKER = 'kafka:9092'
-# TOPICS = ['orders', 'notifications', 'events']
+from kafka import KafkaAdminClient, KafkaProducer
+from kafka.admin import NewTopic
+from kafka.errors import KafkaError, TopicAlreadyExistsError
 
 
 def create_topics(admin_client):
-    """创建主题列表"""
-    print("⏳ 正在创建 Kafka 主题...")
+    """Create topic lists"""
+    print("⏳ Creating Kafka topics...")
     topic_list = [NewTopic(topic, num_partitions=1, replication_factor=1) for topic in TOPICS]
     
     try:
         admin_client.create_topics(new_topics=topic_list, validate_only=False)
-        print(f"✅ 成功创建 {len(TOPICS)} 个主题: {', '.join(TOPICS)}")
+        print(f"✅ Successfully created {len(TOPICS)} topics: {', '.join(TOPICS)}")
     except TopicAlreadyExistsError:
-        print(f"ℹ️ 主题已存在，跳过创建: {', '.join(TOPICS)}")
+        print(f"ℹ️ Topics already exist, skipping creation: {', '.join(TOPICS)}")
     except Exception as e:
-        print(f"❌ 创建主题失败: {e}", file=sys.stderr)
+        print(f"❌ Failed to create topics: {e}", file=sys.stderr)
         sys.exit(1)
 
-def produce_messages():
-    """生产消息到所有主题"""
+def produce_test_messages():
+    """Produce test messages to all topics"""
     producer = KafkaProducer(
         bootstrap_servers=[KAFKA_BROKER],
         api_version=(3, 6, 0)
@@ -39,35 +34,40 @@ def produce_messages():
     
     for topic in TOPICS:
         try:
-            for i in range(3):  # 每个主题发3条消息
-                message = f"测试消息 {i} - {time.strftime('%H:%M:%S')}".encode('utf-8')
+            for i in range(3):  # Send 3 messages to each topic
+                message = f"Test message {i} - {time.strftime('%H:%M:%S')}".encode('utf-8')
                 producer.send(topic, message)
                 producer.flush()
-                print(f"📤 发送到 [{topic}]: {message.decode()}")
+                print(f"📤 Sent to [{topic}]: {message.decode()}")
         except KafkaError as e:
-            print(f"❌ 生产者错误 ({topic}): {e}", file=sys.stderr)
+            print(f"❌ Producer error ({topic}): {e}", file=sys.stderr)
     
     producer.close()
-
-
-##############################
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
 
 # Kafka configuration
 KAFKA_BROKER = 'kafka:9092'
-TOPICS = ['train-locations', 'sim-tomtom-vehicle']  # Add other topics as needed
+TOPICS = ['train-locations', 'sim-tomtom-vehicle']
 
-# --- Kafka Admin Functions ---
+# TomTom API configuration
+TOMTOM_API_KEY = "qVEH8Wgf8a02QXAKbeGFxawLEALIefZJ"  # Replace with your key
+
+# # Vehicle configuration
+# vehicles_config = {
+#     "vehicle1": {"mode": "route", "speed": 200.0, "location": [[51.895532, 4.468462]]},
+#     "vehicle2": {"mode": "route", "speed": 250.0, "location": [[51.895373, 4.485959]]},
+#     "vehicle3": {"mode": "route", "speed": 200.0, "location": [[51.897227, 4.495136]]},
+# }
 
 def create_kafka_admin(max_retries=5, retry_interval=5):
-    """创建 Kafka 管理员客户端（带重试机制）"""
+    """Create Kafka admin client with retry mechanism"""
     for i in range(max_retries):
         try:
             admin = KafkaAdminClient(
                 bootstrap_servers=[KAFKA_BROKER],
-                api_version=(3, 0, 0)  # Match your producer API version
+                api_version=(3, 0, 0)
             )
             logging.info(f"✅ Successfully connected to Kafka Broker: {KAFKA_BROKER}")
             return admin
@@ -104,43 +104,43 @@ def ensure_topics_exist(admin_client=None):
         if admin_client:
             admin_client.close()
 
-# --- Kafka Producer Functions ---
-
 def create_kafka_producer():
+    """Create Kafka producer instance"""
     return KafkaProducer(
         bootstrap_servers=[KAFKA_BROKER],
         api_version=(3, 0, 0),
         value_serializer=lambda x: json.dumps(x).encode('utf-8')
     )
 
-# --- Original Producer Functions (unchanged) ---
-
 TRAIN_LOGS_PATH = 'utils/train_logs.json'
 
 def load_train_logs():
+    """Load train log data from JSON file"""
     with open(TRAIN_LOGS_PATH, 'r') as f:
         return json.load(f)
 
 def parse_timestamp(ts_str):
+    """Convert ISO timestamp to milliseconds"""
     dt = datetime.fromisoformat(ts_str)
     return int(dt.timestamp() * 1000)
 
 def produce_train_messages(producer):
+    """Produce train location messages"""
     try:
         while True:
             train_logs = load_train_logs()
             for entry in train_logs:
                 timestamp = parse_timestamp(entry['timestamp'])
                 for train in entry['trains']:
-                    message = {"key": "value"}  # Your message format
-                    # message = {
-                    #     "timestamp": int(time.time() * 1000),
-                    #     "type": "train",
-                    #     "train_id": train['id'],
-                    #     "location": train['location'],
-                    #     "speed": train['speed'],
-                    #     "direction": train['direction']
-                    # }
+                    message = {
+                        "timestamp": timestamp,
+                        "type": train['type'],
+                        "ritId": train['ritId'],
+                        "lat": train['lat'],
+                        "lng": train['lng'],
+                        "speed": train['snelheid'],
+                        "direction": train['richting']
+                    }
                     logging.info(f"Sending train data: {message}")
                     producer.send('train-locations', message)
                     logging.info("'train-locations' message sent successfully!")
@@ -150,47 +150,64 @@ def produce_train_messages(producer):
         logging.error(f"Train producer error: {e}")
 
 
-def produce_vehicle_messages():
-    destination = (51.9, 4.5)  # Example fixed destination
-    try:
-        while True:
-            for vehicle_id, vehicle_data in vehicles_config.items():
-                origin = vehicle_data['location'][0]
-                route = get_route_from_tomtom(origin, destination, traffic=True)
-                if route:
-                    message = {"key": "value"}
-                    # message = {
-                    #     "timestamp": int(time.time() * 1000),
-                    #     "type": "vehicle",
-                    #     "vehicle_id": vehicle_id,
-                    #     "mode": vehicle_data['mode'],
-                    #     "speed": vehicle_data['speed'],
-                    #     "origin": origin,
-                    #     "destination": destination,
-                    #     "route_summary": {
-                    #         "lengthInMeters": route["lengthInMeters"],
-                    #         "travelTimeInSeconds": route["travelTimeInSeconds"],
-                    #         "trafficDelayInSeconds": route["trafficDelayInSeconds"],
-                    #     },
-                    #     "route_geometry": route["geometry"]
-                    # }
+# def get_route_from_tomtom(origin, destination, traffic=True):
+#     """Get route data from TomTom API"""
+#     base_url = "https://api.tomtom.com/routing/1/calculateRoute"
+#     origin_str = f"{origin[0]},{origin[1]}"
+#     destination_str = f"{destination[0]},{destination[1]}"
+#     traffic_mode = "true" if traffic else "false"
 
-                    logging.info(f"Sending vehicle route data: {message}")
-                    producer.send('sim-tomtom-vehicle', message)
-                    logging.info("sim-tomtom-vehicle' message sent successfully!")
-                else:
-                    logging.warning(f"Skipping message for {vehicle_id} due to route fetch failure.")
-            producer.flush()
-            time.sleep(2)  # Wait 2 seconds before next batch
-    except Exception as e:
-        logging.error(f"Vehicle producer error: {e}")
+#     url = (
+#         f"{base_url}/{origin_str}:{destination_str}/json"
+#         f"?key={TOMTOM_API_KEY}"
+#         f"&travelMode=car"
+#         f"&routeType=fastest"
+#         f"&traffic={traffic_mode}"
+#         f"&computeBestOrder=false"
+#         f"&sectionType=travelMode"
+#         f"&instructionsType=text"
+#         f"&report=effectiveSettings"
+#     )
 
+#     try:
+#         response = requests.get(url)
+#         response.raise_for_status()
+#         route_data = response.json()
+#         summary = route_data['routes'][0]['summary']
+#         return {
+#             "lengthInMeters": summary['lengthInMeters'],
+#             "travelTimeInSeconds": summary['travelTimeInSeconds'],
+#             "trafficDelayInSeconds": summary.get('trafficDelayInSeconds', 0),
+#             "geometry": route_data['routes'][0]['legs'][0]['points'],
+#         }
+#     except requests.RequestException as e:
+#         logging.error(f"Failed to get route from TomTom: {e}")
+#         return None
 
-# --- Main Function ---
+# def produce_vehicle_messages(producer):
+#     """Produce vehicle route messages"""
+#     destination = (51.9, 4.5)  # Example fixed destination
+#     try:
+#         while True:
+#             for vehicle_id, vehicle_data in vehicles_config.items():
+#                 origin = vehicle_data['location'][0]
+#                 route = get_route_from_tomtom(origin, destination, traffic=True)
+#                 if route:
+#                     message = {"key": "value"}  # Example message format
+#                     logging.info(f"Sending vehicle route data: {message}")
+#                     producer.send('sim-tomtom-vehicle', message)
+#                     logging.info("'sim-tomtom-vehicle' message sent successfully!")
+#                 else:
+#                     logging.warning(f"Skipping message for {vehicle_id} due to route fetch failure")
+#             producer.flush()
+#             time.sleep(2)
+#     except Exception as e:
+#         logging.error(f"Vehicle producer error: {e}")
+
 
 def main():
     try:
-        # 1. Ensure Kafka topics exist
+        # 1. Ensure Kafka topics exist # this part works well
         ensure_topics_exist()
         
         # 2. Create producer
@@ -203,14 +220,14 @@ def main():
             daemon=True
         )
         
-        vehicle_thread = threading.Thread(
-            target=produce_vehicle_messages,
-            args=(producer,),
-            daemon=True
-        )
+        # vehicle_thread = threading.Thread(
+        #     target=produce_vehicle_messages,
+        #     args=(producer,),
+        #     daemon=True
+        # )
         
         train_thread.start()
-        vehicle_thread.start()
+        # vehicle_thread.start()
         
         # Keep main thread alive
         while True:
@@ -228,4 +245,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
