@@ -4,6 +4,9 @@ import pydeck as pdk
 import pandas as pd
 import geopandas as gpd
 import numpy as np
+import json
+import time
+import math
 
 # Set wide layout
 st.set_page_config(layout="wide")
@@ -12,76 +15,53 @@ st.set_page_config(layout="wide")
 st.title("Dashboard with Mapbox-kaart via Pydeck")
 
 # Load GeoJSON with railway lines
-gdf = gpd.read_file("rails.geojson")
+rails_gpd = gpd.read_file("rails.geojson")
 
 # Pydeck requires 'path' as list of [lon, lat] pairs
-gdf['path'] = gdf['geometry'].apply(lambda line: [[coord[0], coord[1]] for coord in line.coords])
-
-data = pd.DataFrame({
-    'lat': [52.08529, 52.08533, 52.08538, 52.08542, 52.08546, 52.08552, 52.08571, 52.08573, 52.08577, 52.0858, 
-            52.08599, 52.08613, 52.08615, 52.08634, 52.08657, 52.08685, 52.087, 52.08724, 52.08755, 52.08781, 
-            52.08812, 52.0884, 52.08879, 52.08915, 52.08979, 52.09031, 52.09032, 52.09089, 52.09105, 52.0915, 
-            52.09154, 52.09156, 52.09173, 52.0919, 52.09217, 52.09224, 52.09235, 52.09237, 52.0924, 52.09258, 
-            52.09264, 52.09265, 52.09287, 52.09298, 52.09348, 52.0936, 52.09433, 52.09445, 52.09449, 52.09472, 
-            52.09474, 52.09486, 52.09489, 52.09493, 52.09515, 52.09522, 52.09527, 52.09539, 52.09542, 52.09545, 
-            52.09546, 52.09549, 52.0955, 52.09571, 52.0959, 52.09592, 52.09587, 52.09585, 52.09581, 52.09585, 
-            52.09588, 52.09592, 52.09595, 52.09602, 52.09607, 52.09611, 52.09615, 52.09622, 52.0963, 52.09637, 
-            52.09643, 52.09648, 52.09651, 52.09662, 52.09668, 52.09672, 52.09679, 52.09701, 52.09717, 52.09747, 
-            52.09805, 52.09872, 52.09907, 52.09937, 52.09968, 52.10008, 52.10027, 52.10081, 52.10104, 52.10148, 
-            52.10162, 52.10174, 52.10189, 52.10197, 52.102, 52.10203, 52.10216, 52.10221, 52.10226, 52.10239, 
-            52.10249, 52.10254, 52.10257, 52.1026, 52.10266, 52.10269, 52.10267, 52.10261, 52.10258, 52.10255, 
-            52.10247, 52.10247, 52.10247, 52.10247, 52.1025, 52.1025, 52.10255, 52.10257, 52.10265, 52.10269, 
-            52.10273, 52.10275, 52.10276, 52.10278, 52.10279, 52.10285, 52.103, 52.10302, 52.10313, 52.10323, 
-            52.10331, 52.1034, 52.10341, 52.10354, 52.10365, 52.10369, 52.10371, 52.10373, 52.10374, 52.10376, 
-            52.10378, 52.1038, 52.1038, 52.10379, 52.10376, 52.10376, 52.10376, 52.1038, 52.10384, 52.10395, 
-            52.10435, 52.10444, 52.10453, 52.10455, 52.10456, 52.10476, 52.10499, 52.10526, 52.10539, 52.10563, 
-            52.10571, 52.10575, 52.10577, 52.10594, 52.10595, 52.10609, 52.10615, 52.10618, 52.10621, 52.10626, 
-            52.1063, 52.10631, 52.1063, 52.10628, 52.10625, 52.10622, 52.10614, 52.10607, 52.10601, 52.10581, 
-            52.1056, 52.10532, 52.10509, 52.10446, 52.10445, 52.10443, 52.10439, 52.10437, 52.10433, 52.10432, 
-            52.1043, 52.10428, 52.10426, 52.10424, 52.10423, 52.10423, 52.10424, 52.10424, 52.10426, 52.10428, 
-            52.10433, 52.10437],
-    'lon': [5.14152, 5.14145, 5.14135, 5.14129, 5.14125, 5.14124, 5.14102, 5.14093, 5.14089, 5.14096, 
-            5.14134, 5.14158, 5.1416, 5.14187, 5.14212, 5.14231, 5.14236, 5.14246, 5.14255, 5.14257, 
-            5.14255, 5.1425, 5.14234, 5.14215, 5.14187, 5.14161, 5.1416, 5.14112, 5.14112, 5.14122, 
-            5.14125, 5.14129, 5.14126, 5.14129, 5.14141, 5.14145, 5.1416, 5.14163, 5.14166, 5.14177, 
-            5.1418, 5.14181, 5.14185, 5.14184, 5.14167, 5.14166, 5.14181, 5.14181, 5.14181, 5.14168, 
-            5.14168, 5.14162, 5.1416, 5.14157, 5.14136, 5.14139, 5.1414, 5.14145, 5.14147, 5.14149, 
-            5.14152, 5.1416, 5.14163, 5.14258, 5.14342, 5.14354, 5.14362, 5.14366, 5.14382, 5.14415, 
-            5.14424, 5.14439, 5.14442, 5.14448, 5.1445, 5.14452, 5.14454, 5.14454, 5.14451, 5.14445, 
-            5.14436, 5.14429, 5.1442, 5.14402, 5.14393, 5.14388, 5.14382, 5.14368, 5.14361, 5.14347, 
-            5.14327, 5.14311, 5.14309, 5.14306, 5.14307, 5.1431, 5.14312, 5.14318, 5.14323, 5.14332, 
-            5.14335, 5.14339, 5.14348, 5.14359, 5.14364, 5.1437, 5.14387, 5.14391, 5.14394, 5.14395, 
-            5.14389, 5.14385, 5.14378, 5.14368, 5.14349, 5.14331, 5.14314, 5.14295, 5.14288, 5.14279, 
-            5.14249, 5.14222, 5.142, 5.14197, 5.14167, 5.1416, 5.14042, 5.14009, 5.13873, 5.13776, 
-            5.13674, 5.13625, 5.13606, 5.13577, 5.13561, 5.13495, 5.13354, 5.13344, 5.13273, 5.13224, 
-            5.13186, 5.13151, 5.13145, 5.1311, 5.13085, 5.13081, 5.13078, 5.13074, 5.13073, 5.13067, 
-            5.13059, 5.1305, 5.13033, 5.1303, 5.13026, 5.12995, 5.12989, 5.12979, 5.12955, 5.12938, 
-            5.12891, 5.12722, 5.12683, 5.12646, 5.12636, 5.12629, 5.12536, 5.12435, 5.12313, 5.12248, 
-            5.12129, 5.12085, 5.12068, 5.12059, 5.11968, 5.11963, 5.11883, 5.11835, 5.11796, 5.11739, 
-            5.11667, 5.11603, 5.11593, 5.11578, 5.11565, 5.11549, 5.11538, 5.11521, 5.11509, 5.11502, 
-            5.11485, 5.11473, 5.11463, 5.11459, 5.11454, 5.11449, 5.11445, 5.11442, 5.11442, 5.11442, 
-            5.11442, 5.11443, 5.11444, 5.11448, 5.11454, 5.11457, 5.11459, 5.11461, 5.11465, 5.11468, 
-            5.1147, 5.11473]
-})
-
-# Pydeck layer with route
-layer = pdk.Layer(
-    'ScatterplotLayer',
-    data=data,
-    get_position='[lon, lat]',
-    get_color='[0, 100, 200, 160]',
-    get_radius=10,
-)
+rails_gpd['path'] = rails_gpd['geometry'].apply(lambda line: [[coord[0], coord[1]] for coord in line.coords])
 
 # Pydeck layer with rail lines
 rail_layer = pdk.Layer(
     'PathLayer',
-    data=gdf,
+    data=rails_gpd,
     get_path='path',
     get_width=4,
     get_color='[255, 0, 0]',
     pickable=True,
     width_min_pixels=2,
+)
+
+# Load TomTom route JSON
+with open("UtrechtTomTomRoute.json") as f:
+    tomtom_data = json.load(f)
+
+# Extract coordinates from TomTom API response
+points = tomtom_data['routes'][0]['legs'][0]['points']
+points_df = pd.DataFrame(points)
+route_path = [[pt['longitude'], pt['latitude']] for pt in points]
+
+# Create DataFrame for the route
+route_df = pd.DataFrame({'path': [route_path]})
+
+# Create Pydeck PathLayer for the route
+route_layer = pdk.Layer(
+    'PathLayer',
+    data=route_df,
+    get_path='path',
+    get_width=6,
+    get_color='[0, 0, 255]',  # Blue
+    pickable=True,
+    width_min_pixels=3,
+)
+
+# Create a ScatterplotLayer for the route points
+route_points_layer = pdk.Layer(
+    "ScatterplotLayer",
+    data=points_df,
+    get_position='[longitude, latitude]',
+    get_fill_color='[0, 255, 0, 160]',  # Blue with some transparency
+    get_radius=20,
+    pickable=True,
 )
 
 # Set starting view state
@@ -92,27 +72,71 @@ view_state = pdk.ViewState(
     pitch=0,
 )
 
-# Define pydeck
-deck = pdk.Deck(
-    layers=[layer, rail_layer],
-    initial_view_state=view_state,
-    map_provider='mapbox',
-    map_style='mapbox://styles/mapbox/light-v9',
-)
+#%%
+def haversine(coord1, coord2):
+    # Coordinates in decimal degrees (e.g. 52.1, 5.1)
+    lat1, lon1 = coord1
+    lat2, lon2 = coord2
 
-st.pydeck_chart(deck)
+    R = 6371000  # Radius of Earth in meters
+    phi1 = math.radians(lat1)
+    phi2 = math.radians(lat2)
 
-# --- Simulated Bottom Bar ---
-st.markdown("### 📊 Analysis panels")
+    delta_phi = math.radians(lat2 - lat1)
+    delta_lambda = math.radians(lon2 - lon1)
 
-col1, col2 = st.columns(2)
+    a = math.sin(delta_phi / 2) ** 2 + \
+        math.cos(phi1) * math.cos(phi2) * \
+        math.sin(delta_lambda / 2) ** 2
 
-with col1:
-    st.subheader("Graph 1")
-    chart_data1 = pd.DataFrame(np.random.randn(20, 3), columns=["A", "B", "C"])
-    st.line_chart(chart_data1)
+    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
-with col2:
-    st.subheader("Graph 2")
-    chart_data2 = pd.DataFrame(np.random.rand(10, 2), columns=["X", "Y"])
-    st.bar_chart(chart_data2)
+    return R * c  # Output: distance in meters
+
+# Calculate total time and distance
+total_time = tomtom_data['routes'][0]['summary']['travelTimeInSeconds']
+total_distance = tomtom_data['routes'][0]['summary']['lengthInMeters']  # meters
+
+# Estimate average speed (meters/second)
+speed_mps = 10 * total_distance / total_time
+
+# Container to update chart dynamically
+chart_placeholder = st.empty()
+
+# Move point along path
+for i in range(len(points) - 1):
+    start = points[i]
+    end = points[i + 1]
+
+    # Distance between current point and next point (in meters)
+    dist = haversine((start['latitude'], start['longitude']),
+                    (end['latitude'], end['longitude']))
+
+    # Time to wait between this and next point
+    delay = dist / speed_mps
+
+    # Point to draw
+    current_point_df = pd.DataFrame([{
+        "latitude": start['latitude'],
+        "longitude": start['longitude']
+    }])
+
+    # Moving point layer
+    moving_point_layer = pdk.Layer(
+        "ScatterplotLayer",
+        data=current_point_df,
+        get_position='[longitude, latitude]',
+        get_fill_color='[255, 165, 0, 200]',  # Orange
+        get_radius=60,
+    )
+
+    # Update chart with the moving point
+    deck = pdk.Deck(
+        layers=[rail_layer, route_layer, route_points_layer, moving_point_layer],
+        initial_view_state=view_state,
+        map_provider='mapbox',
+        map_style='mapbox://styles/mapbox/light-v9',
+    )
+    chart_placeholder.pydeck_chart(deck)
+
+    time.sleep(delay)
