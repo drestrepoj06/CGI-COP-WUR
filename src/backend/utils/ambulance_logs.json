@@ -1,0 +1,422 @@
+[
+  {
+    "timestamp": "2025-06-06T08:58:35.936712",
+    "ambulances": [
+      {
+        "id": "ambulance_1",
+        "lat": 52.12133,
+        "lng": 5.03515,
+        "speed_kmh": 64.77,
+        "heading": 0.0,
+        "accuracy_m": 11.8,
+        "type": "ambulance",
+        "source": "simulated"
+      },
+      {
+        "id": "ambulance_2",
+        "lat": 52.10933,
+        "lng": 5.1143,
+        "speed_kmh": 31.34,
+        "heading": 315.35,
+        "accuracy_m": 13.6,
+        "type": "ambulance",
+        "source": "simulated"
+      },
+      {
+        "id": "ambulance_3",
+        "lat": 52.08081,
+        "lng": 5.13731,
+        "speed_kmh": 45.91,
+        "heading": 309.13,
+        "accuracy_m": 11.0,
+        "type": "ambulance",
+        "source": "simulated"
+      }
+    ]
+  },
+  {
+    "timestamp": "2025-06-06T08:58:40.937770",
+    "ambulances": [
+      {
+        "id": "ambulance_1",
+        "lat": 52.12133,
+        "lng": 5.03517,
+        "speed_kmh": 53.87,
+        "heading": 90.0,
+        "accuracy_m": 7.9,
+        "type": "ambulance",
+        "source": "simulated"
+      },
+      {
+        "id": "ambulance_2",
+        "lat": 52.10919,
+        "lng": 5.11399,
+        "speed_kmh": 66.73,
+        "heading": 233.67,
+        "accuracy_m": 7.5,
+        "type": "ambulance",
+        "source": "simulated"
+      },
+      {
+        "id": "ambulance_3",
+        "lat": 52.08082,
+        "lng": 5.13726,
+        "speed_kmh": 51.8,
+        "heading": 288.03,
+        "accuracy_m": 9.7,
+        "type": "ambulance",
+        "source": "simulated"
+      }
+    ]
+  },
+  {
+    "timestamp": "2025-06-06T08:58:45.938645",
+    "ambulances": [
+      {
+        "id": "ambulance_1",
+        "lat": 52.12133,
+        "lng": 5.03518,
+        "speed_kmh": 59.24,
+        "heading": 90.0,
+        "accuracy_m": 5.9,
+        "type": "ambulance",
+        "source": "simulated"
+      },
+      {
+        "id": "ambulance_2",
+        "lat": 52.109,
+        "lng": 5.11353,
+        "speed_kmh": 50.18,
+        "heading": 236.08,
+        "accuracy_m": 5.6,
+        "type": "ambulance",
+        "source": "simulated"
+      },
+      {
+        "id": "ambulance_3",
+        "lat": 52.08082,
+        "lng": 5.13722,
+        "speed_kmh": 54.73,
+        "heading": 270.0,
+        "accuracy_m": 11.8,
+        "type": "ambulance",
+        "source": "simulated"
+      }
+    ]
+  },
+  {
+    "timestamp": "2025-06-06T08:58:50.939622",
+    "ambulances": [
+      {
+        "id": "ambulance_1",
+        "lat": 52.12138,
+        "lng": 5.03529,
+        "speed_kmh": 45.18,
+        "heading": 53.49,
+        "accuracy_m": 7.4,
+        "type": "ambulance",
+        "source": "simulated"
+      },
+      {
+        "id": "ambulance_2",
+        "lat": 52.10889,
+        "lng": 5.11325,
+        "speed_kmh": 48.92,
+        "heading": 237.39,
+        "accuracy_m": 9.1,
+        "type": "ambulance",
+        "source": "simulated"
+      },
+      {
+        "id": "ambulance_3",
+        "lat": 52.08082,
+        "lng": 5.13707,
+        "speed_kmh": 31.01,
+        "heading": 270.0,
+        "accuracy_m": 11.0,
+        "type": "ambulance",
+        "source": "simulated"
+      }
+    ]
+  },
+  {
+    "timestamp": "2025-06-06T08:58:55.940779",
+    "ambulances": [
+      {
+        "id": "ambulance_1",
+        "lat": 52.12147,
+        "lng": 5.03543,
+        "speed_kmh": 55.97,
+        "heading": 43.68,
+        "accuracy_m": 5.1,
+        "type": "ambulance",
+        "source": "simulated"
+      },
+      {
+        "id": "ambulance_2",
+        "lat": 52.10872,
+        "lng": 5.11282,
+        "speed_kmh": 59.01,
+        "heading": 237.23,
+        "accuracy_m": 8.9,
+        "type": "ambulance",
+        "source": "simulated"
+      },
+      {
+        "id": "ambulance_3",
+        "lat": 52.08096,
+        "lng": 5.13704,
+        "speed_kmh": 58.94,
+        "heading": 352.5,
+        "accuracy_m": 10.1,
+        "type": "ambulance",
+        "source": "simulated"
+      }
+    ]
+  },
+  {
+    "timestamp": "2025-06-06T08:59:00.941876",
+    "ambulances": [
+      {
+        "id": "ambulance_1",
+        "lat": 52.12131,
+        "lng": 5.03571,
+        "speed_kmh": 44.26,
+        "heading": 132.94,
+        "accuracy_m": 5.7,
+        "type": "ambulance",
+        "source": "simulated"
+      },
+      {
+        "id": "ambulance_2",
+        "lat": 52.10866,
+        "lng": 5.11267,
+        "speed_kmh": 45.18,
+        "heading": 236.92,
+        "accuracy_m": 10.3,
+        "type": "ambulance",
+        "source": "simulated"
+      },
+      {
+        "id": "ambulance_3",
+        "lat": 52.08108,
+        "lng": 5.13702,
+        "speed_kmh": 68.03,
+        "heading": 354.15,
+        "accuracy_m": 14.7,
+        "type": "ambulance",
+        "source": "simulated"
+      }
+    ]
+  },
+  {
+    "timestamp": "2025-06-06T08:59:05.943221",
+    "ambulances": [
+      {
+        "id": "ambulance_1",
+        "lat": 52.12107,
+        "lng": 5.03611,
+        "speed_kmh": 69.14,
+        "heading": 134.34,
+        "accuracy_m": 13.8,
+        "type": "ambulance",
+        "source": "simulated"
+      },
+      {
+        "id": "ambulance_2",
+        "lat": 52.10836,
+        "lng": 5.11296,
+        "speed_kmh": 54.18,
+        "heading": 149.3,
+        "accuracy_m": 12.9,
+        "type": "ambulance",
+        "source": "simulated"
+      },
+      {
+        "id": "ambulance_3",
+        "lat": 52.08137,
+        "lng": 5.13697,
+        "speed_kmh": 39.13,
+        "heading": 353.95,
+        "accuracy_m": 9.7,
+        "type": "ambulance",
+        "source": "simulated"
+      }
+    ]
+  },
+  {
+    "timestamp": "2025-06-06T08:59:10.944314",
+    "ambulances": [
+      {
+        "id": "ambulance_1",
+        "lat": 52.12094,
+        "lng": 5.03632,
+        "speed_kmh": 37.54,
+        "heading": 135.23,
+        "accuracy_m": 11.0,
+        "type": "ambulance",
+        "source": "simulated"
+      },
+      {
+        "id": "ambulance_2",
+        "lat": 52.10829,
+        "lng": 5.11303,
+        "speed_kmh": 41.11,
+        "heading": 148.44,
+        "accuracy_m": 7.2,
+        "type": "ambulance",
+        "source": "simulated"
+      },
+      {
+        "id": "ambulance_3",
+        "lat": 52.0815,
+        "lng": 5.13695,
+        "speed_kmh": 34.7,
+        "heading": 354.6,
+        "accuracy_m": 8.1,
+        "type": "ambulance",
+        "source": "simulated"
+      }
+    ]
+  },
+  {
+    "timestamp": "2025-06-06T08:59:15.945511",
+    "ambulances": [
+      {
+        "id": "ambulance_1",
+        "lat": 52.12089,
+        "lng": 5.03641,
+        "speed_kmh": 64.36,
+        "heading": 132.14,
+        "accuracy_m": 9.6,
+        "type": "ambulance",
+        "source": "simulated"
+      },
+      {
+        "id": "ambulance_2",
+        "lat": 52.10736,
+        "lng": 5.11405,
+        "speed_kmh": 43.62,
+        "heading": 146.03,
+        "accuracy_m": 8.6,
+        "type": "ambulance",
+        "source": "simulated"
+      },
+      {
+        "id": "ambulance_3",
+        "lat": 52.08173,
+        "lng": 5.1369,
+        "speed_kmh": 62.02,
+        "heading": 352.39,
+        "accuracy_m": 7.6,
+        "type": "ambulance",
+        "source": "simulated"
+      }
+    ]
+  },
+  {
+    "timestamp": "2025-06-06T08:59:20.947122",
+    "ambulances": [
+      {
+        "id": "ambulance_1",
+        "lat": 52.1207,
+        "lng": 5.03676,
+        "speed_kmh": 58.13,
+        "heading": 131.48,
+        "accuracy_m": 11.5,
+        "type": "ambulance",
+        "source": "simulated"
+      },
+      {
+        "id": "ambulance_2",
+        "lat": 52.10705,
+        "lng": 5.1144,
+        "speed_kmh": 36.73,
+        "heading": 145.26,
+        "accuracy_m": 6.8,
+        "type": "ambulance",
+        "source": "simulated"
+      },
+      {
+        "id": "ambulance_3",
+        "lat": 52.08203,
+        "lng": 5.13686,
+        "speed_kmh": 65.38,
+        "heading": 355.32,
+        "accuracy_m": 7.8,
+        "type": "ambulance",
+        "source": "simulated"
+      }
+    ]
+  },
+  {
+    "timestamp": "2025-06-06T08:59:25.948419",
+    "ambulances": [
+      {
+        "id": "ambulance_1",
+        "lat": 52.12066,
+        "lng": 5.03683,
+        "speed_kmh": 54.17,
+        "heading": 132.94,
+        "accuracy_m": 14.7,
+        "type": "ambulance",
+        "source": "simulated"
+      },
+      {
+        "id": "ambulance_2",
+        "lat": 52.10689,
+        "lng": 5.11455,
+        "speed_kmh": 35.86,
+        "heading": 150.07,
+        "accuracy_m": 6.2,
+        "type": "ambulance",
+        "source": "simulated"
+      },
+      {
+        "id": "ambulance_3",
+        "lat": 52.08209,
+        "lng": 5.13684,
+        "speed_kmh": 47.72,
+        "heading": 348.42,
+        "accuracy_m": 7.8,
+        "type": "ambulance",
+        "source": "simulated"
+      }
+    ]
+  },
+  {
+    "timestamp": "2025-06-06T08:59:30.950204",
+    "ambulances": [
+      {
+        "id": "ambulance_1",
+        "lat": 52.12057,
+        "lng": 5.03698,
+        "speed_kmh": 38.03,
+        "heading": 134.34,
+        "accuracy_m": 13.0,
+        "type": "ambulance",
+        "source": "simulated"
+      },
+      {
+        "id": "ambulance_2",
+        "lat": 52.10687,
+        "lng": 5.11457,
+        "speed_kmh": 34.57,
+        "heading": 148.44,
+        "accuracy_m": 13.2,
+        "type": "ambulance",
+        "source": "simulated"
+      },
+      {
+        "id": "ambulance_3",
+        "lat": 52.08234,
+        "lng": 5.13681,
+        "speed_kmh": 47.12,
+        "heading": 355.78,
+        "accuracy_m": 5.9,
+        "type": "ambulance",
+        "source": "simulated"
+      }
+    ]
+  }
+]

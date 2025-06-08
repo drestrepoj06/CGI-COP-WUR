@@ -1,8 +1,0 @@
-version: "3.13"
-services:
-  python-app:
-    build: ./app
-    volumes:
-      - ./app:/app
-    working_dir: /app
-    command: python main.py
