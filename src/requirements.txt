@@ -2,4 +2,9 @@ requests
 kafka-python>=2.0.2
 geopandas>=0.12.0
 shapely>=1.8.0
+streamlit
 pandas
+geopandas
+
+
+
