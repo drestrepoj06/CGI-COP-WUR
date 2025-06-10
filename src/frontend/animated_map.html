@@ -30,14 +30,13 @@
     attribution: '© OpenStreetMap contributors'
   }).addTo(map);
 
-  // Render rails
-  L.geoJSON(railsData, {
-    style: {
-      color: 'black',
-      weight: 1,
-      opacity: 0.6
-    }
-  }).addTo(map);
+  // Add a 10 km radius circle centered at 52.094040, 5.093102
+  const circle = L.circle([52.094040, 5.093102], {
+    radius: 10000, // in meters
+    color: 'black',
+    fillColor: '#f03',
+    fillOpacity: 0
+  }).addTo(map).bindPopup("Study area");
 
   const trainMarkers = {}; // Store markers by ritId
   let currentIndex = 0;
