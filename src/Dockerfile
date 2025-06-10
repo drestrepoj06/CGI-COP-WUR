@@ -8,6 +8,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 COPY frontend/animated_map.html .
 COPY frontend/data/train_location_data/ ./train_location_data/
+COPY frontend/data/ambulance_location_data/ ./ambulance_location_data/
+
 
 
 # CMD ["python", "backend/main.py"]

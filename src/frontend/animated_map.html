@@ -74,6 +74,42 @@
   }
 
   updateTrains();
+
+  const ambulanceMarkers = {}; // Store ambulance markers by vehicle number
+let ambulanceIndex = 0;
+
+function updateAmbulances() {
+  const frame = ambulanceData[ambulanceIndex];
+  if (!frame) return;
+
+  frame.features.forEach(ambulance => {
+    const id = ambulance.vehicle_number;
+    const latlng = [ambulance.lat, ambulance.lon];
+
+    if (ambulanceMarkers[id]) {
+      ambulanceMarkers[id].setLatLng(latlng);
+    } else {
+      const marker = L.circleMarker(latlng, {
+        radius: 6,
+        color: 'red',
+        fillColor: 'red',
+        fillOpacity: 0.8
+      }).addTo(map).bindPopup(`Ambulance ${id}`);
+      ambulanceMarkers[id] = marker;
+    }
+  });
+
+  const nextFrame = ambulanceData[ambulanceIndex + 1];
+  if (nextFrame) {
+    const delay = Math.max(500, (nextFrame.timestamp - frame.timestamp) / SPEED_FACTOR);
+    setTimeout(updateAmbulances, delay);
+  }
+
+  ambulanceIndex++;
+}
+
+updateAmbulances();
+
 </script>
 
 </body>

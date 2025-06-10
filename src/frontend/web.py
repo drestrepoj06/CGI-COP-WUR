@@ -26,12 +26,12 @@ with open("frontend/rails.geojson", "r") as f:
     rails_geojson = json.load(f)
 rails_js = json.dumps(rails_geojson)
 
-
 # Load and sort all train location files
 train_files = sorted(
     glob("frontend/data/train_location_data/*.json"),
     key=lambda f: int(os.path.basename(f).replace(".json", ""))
 )
+
 
 # Parse all train points, keyed by timestamp
 train_data = []
@@ -59,8 +59,42 @@ for file in train_files:
     })
     timestamps.append(timestamp)
 
-# Prepare JS-friendly object
+# Prepare JS-friendly object for train data
 train_js_data = json.dumps(train_data)
+
+# Load and sort all ambulance location files
+ambulance_files = sorted(
+    glob("frontend/data/ambulance_location_data/*.json"),
+    key=lambda f: int(os.path.basename(f).replace(".json", "").split("_")[1])  
+)
+
+ambulance_data = []
+
+for file in ambulance_files:
+    # Extract just the numeric part of the filename
+    timestamp = int(os.path.basename(file).replace(".json", "").split("_")[1])
+    with open(file, "r") as f:
+        geojson = json.load(f)
+
+    features = [
+        {
+            "lat": f["geometry"]["coordinates"][1],
+            "lon": f["geometry"]["coordinates"][0],
+            "vehicle_number": f["properties"]["vehicle_number"],
+            "speed": f["properties"]["speed"],
+            "type": f["properties"]["type"]
+        }
+        for f in geojson["features"]
+    ]
+
+    ambulance_data.append({
+        "timestamp": timestamp,
+        "features": features
+    }
+    )
+
+# Prepare JS-friendly object for ambulance data
+ambulance_js_data = json.dumps(ambulance_data)
 
 # Inject into HTML
 with open("frontend/animated_map.html", "r") as f:
@@ -68,7 +102,7 @@ with open("frontend/animated_map.html", "r") as f:
 
 coord_js = str(route).replace("(", "[").replace(")", "]")  # JS-friendly format
 html = html.replace("//__INSERT_ROUTE_HERE__", f"const route = {coord_js};")
-html = html.replace("//__INSERT_TRAIN_DATA_HERE__", f"const trainData = {train_js_data};")
+html = html.replace("//__INSERT_TRAIN_DATA_HERE__", f"const trainData = {train_js_data};\nconst ambulanceData = {ambulance_js_data};")
 html = html.replace("//__INSERT_RAILS_HERE__", f"const railsData = {rails_js};")
 
 

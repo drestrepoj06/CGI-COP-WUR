@@ -1,0 +1,10 @@
+{
+"type": "FeatureCollection",
+"name": "ambulance_1749200365948",
+"crs": { "type": "name", "properties": { "name": "urn:ogc:def:crs:OGC:1.3:CRS84" } },
+"features": [
+{ "type": "Feature", "properties": { "timestamp": "1749200365948", "vehicle_number": "ambulance_1", "speed": 54.17, "heading": 132.94, "accuracy": 14.7, "type": "ambulance", "source": "simulated" }, "geometry": { "type": "Point", "coordinates": [ 5.03683, 52.12066 ] } },
+{ "type": "Feature", "properties": { "timestamp": "1749200365948", "vehicle_number": "ambulance_2", "speed": 35.86, "heading": 150.07, "accuracy": 6.2, "type": "ambulance", "source": "simulated" }, "geometry": { "type": "Point", "coordinates": [ 5.11455, 52.10689 ] } },
+{ "type": "Feature", "properties": { "timestamp": "1749200365948", "vehicle_number": "ambulance_3", "speed": 47.72, "heading": 348.42, "accuracy": 7.8, "type": "ambulance", "source": "simulated" }, "geometry": { "type": "Point", "coordinates": [ 5.13684, 52.08209 ] } }
+]
+}
