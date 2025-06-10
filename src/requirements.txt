@@ -6,5 +6,6 @@ streamlit
 pandas
 geopandas
 altair
+redis
 
 
