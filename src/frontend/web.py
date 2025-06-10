@@ -3,9 +3,23 @@ import json
 import os
 import pandas as pd
 from glob import glob
+import altair as alt
 
-st.set_page_config(layout="wide")
-st.title("Live Train Animation Map")
+
+# Load TomTom route
+with open("frontend/UtrechtTomTomRoute.json") as f:
+    data = json.load(f)
+
+points = data['routes'][0]['legs'][0]['points']
+points_df = pd.DataFrame(points)
+
+# Save coordinates for JS
+route = [(pt['latitude'], pt['longitude']) for pt in points]
+st.session_state['route'] = route  # Optional: if needed later
+
+# st.set_page_config(layout="wide")
+# st.title("Live Train Animation Map")
+
 
 # Load rails GeoJSON
 with open("frontend/rails.geojson", "r") as f:
@@ -52,8 +66,68 @@ train_js_data = json.dumps(train_data)
 with open("frontend/animated_map.html", "r") as f:
     html = f.read()
 
+coord_js = str(route).replace("(", "[").replace(")", "]")  # JS-friendly format
+html = html.replace("//__INSERT_ROUTE_HERE__", f"const route = {coord_js};")
 html = html.replace("//__INSERT_TRAIN_DATA_HERE__", f"const trainData = {train_js_data};")
 html = html.replace("//__INSERT_RAILS_HERE__", f"const railsData = {rails_js};")
 
-# Show the animated map
-st.components.v1.html(html, height=700, scrolling=False)
+
+# Streamlit app setup
+st.set_page_config(
+    page_title="COP Dashboard",
+    page_icon="🚅",
+    layout="wide",
+    initial_sidebar_state="collapsed",)
+
+# Sidebar
+with st.sidebar:
+    st.title('COP dashboard')
+
+# Create columns for layout
+col = st.columns((2, 6, 0.5), gap='small')
+
+# Left column
+with col[0]:
+    # Infografic
+    st.metric(label="Number of ...", value="0 ...", delta="1.4%")
+
+    # Ambulance data table
+    st.subheader("Ambulance station availability")
+    # Sample data
+    ambulance_data = pd.DataFrame({
+        "Station": ["Maarssen", "Vader Rijndreef", "Diakonessenhuis"],
+        "Ambulances": [3, 5, 2],
+        "Capacity": [5, 6, 4]
+    })
+    
+    # Display the table
+    st.dataframe(
+        ambulance_data,
+        column_order=("Station", "Ambulances"),
+        hide_index=True,
+        width=None,
+        column_config={
+            "Station": st.column_config.TextColumn(
+                "Station",
+                width="medium"
+            ),
+            "Ambulances": st.column_config.ProgressColumn(
+                "Available",
+                format="%d",  # Display as integer
+                min_value=0,
+                max_value=max(ambulance_data["Capacity"]),
+                width="medium"
+            )
+        }
+    )
+
+# Middle column
+with col[1]:
+    st.components.v1.html(html, height=700, scrolling=False) # Show the animated map
+
+# Right column
+with col[2]:
+    st.button("Button 1")
+    st.button("Button 2")
+    st.button("Button 3")
+
