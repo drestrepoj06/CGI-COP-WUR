@@ -3,7 +3,7 @@ import logging
 import sys
 import os
 import time
-
+import redis
 import geopandas as gpd
 from shapely.geometry import Point
 import pandas as pd
@@ -16,6 +16,11 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(mess
 KAFKA_BROKER = 'kafka:9092'
 TOPICS = ['train-locations', 'ambulance-locations']
 GROUP_ID = 'vehicle-location-consumers'
+
+# Tile38 setup
+TILE38_HOST = 'tile38'
+TILE38_PORT = 9851
+tile38 = redis.Redis(host=TILE38_HOST, port=TILE38_PORT, decode_responses=True)
 
 # Output folders
 OUTPUT_DIRS = {
@@ -44,11 +49,9 @@ def create_kafka_consumer():
         logging.error(f"❌ KafkaConsumer creation failed: {e}")
         sys.exit(1)
 
-
 def create_empty_geodf(columns):
     """Initialize an empty GeoDataFrame with geometry."""
     return gpd.GeoDataFrame(columns=columns, geometry='geometry', crs='EPSG:4326')
-
 
 def message_to_georow(msg, topic):
     """Convert Kafka message to a dictionary row with geometry."""
@@ -82,11 +85,31 @@ def message_to_georow(msg, topic):
         logging.error(f"🚨 Failed to parse message into GeoRow: {e}")
         return None
 
+def process_train_message(message):
+    """Process train location updates and manage geofences in Tile38."""
+    train_id = message["ritId"]
+    lat, lng, speed = message["lat"], message["lng"], message["speed"]
 
+    if speed == 0:  # Train has stopped, create geofence
+        tile38.execute_command(f"SET trains {train_id} POINT {lat} {lng}")
+        logging.info(f"🚧 Geofence set for stopped train {train_id} at ({lat}, {lng})")
+
+def process_ambulance_message(message):
+    """Monitor ambulance movement and check if they enter train geofences."""
+    vehicle_id = message["vehicle_number"]
+    lat, lng = message["lat"], message["lng"]
+
+    logging.info(f"🚑 Ambulance {vehicle_id} at ({lat}, {lng})")
+
+    # Check if ambulance enters any train geofence
+    response = tile38.execute_command(f"WITHIN trains FENCE RADIUS 500 POINT {lat} {lng}")
+    if response and response != "null":
+        logging.warning(f"🚨 Ambulance {vehicle_id} entered train geofence!")
+    
 def main():
+    """Consume messages from Kafka and process train and ambulance locations."""
     consumer = create_kafka_consumer()
 
-    # Grouping state for each topic
     current_timestamps = {
         'train-locations': None,
         'ambulance-locations': None
@@ -149,7 +172,6 @@ def main():
                 gdf.to_file(out_path, driver='GeoJSON')
                 logging.info(f"💾 Saved final batch of {len(gdf)} records to {out_path}")
 
-
-
 if __name__ == "__main__":
     main()
+
