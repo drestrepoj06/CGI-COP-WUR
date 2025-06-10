@@ -29,7 +29,7 @@ rails_js = json.dumps(rails_geojson)
 # Load and sort all train location files
 train_files = sorted(
     glob("frontend/data/train_location_data/*.json"),
-    key=lambda f: int(os.path.basename(f).replace(".json", ""))
+    key=lambda f: int(os.path.basename(f).replace(".json", "").split("_")[1])
 )
 
 
@@ -38,7 +38,7 @@ train_data = []
 timestamps = []
 
 for file in train_files:
-    timestamp = int(os.path.basename(file).replace(".json", ""))
+    timestamp = int(os.path.basename(file).replace(".json", "").split("_")[1])
     with open(file, "r") as f:
         geojson = json.load(f)
 
