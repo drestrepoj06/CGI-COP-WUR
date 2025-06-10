@@ -4,6 +4,7 @@ import json
 import logging
 import threading
 from datetime import datetime
+import redis
 
 from kafka import KafkaAdminClient, KafkaProducer
 from kafka.admin import NewTopic
@@ -20,8 +21,6 @@ TRAIN_LOGS_PATH = 'backend/utils/train_logs.json'
 AMB_LOGS_PATH = 'backend/utils/ambulance_logs.json'
 TOPICS = ['train-locations', 'ambulance-locations']
 
-# TRAIN_LOGS_PATH = 'utils/train_logs.json'
-# AMB_LOGS_PATH = 'utils/ambulance_logs.json'
 
 def create_kafka_admin(max_retries=5, retry_interval=5):
     """Create Kafka admin client with retry mechanism"""
@@ -124,22 +123,19 @@ def load_ambulance_logs():
         logging.error(f"Failed to load ambulance logs: {e}")
         return []
 
+tile38 = redis.Redis(host='tile38', port=9851, decode_responses=True)
+
 def produce_train_messages():
-    """Produce train location messages in batches based on timestamps"""
+    """Produce train location messages and create geofences for stopped trains"""
     producer = KafkaProducer(
         bootstrap_servers=[KAFKA_BROKER],
         api_version=(3, 0, 0),
         value_serializer=lambda x: json.dumps(x).encode('utf-8')
     )
     try:
-        train_logs = load_train_logs()  # Load train logs
-        timestamp_groups = {}  # Dictionary to store messages grouped by timestamp
-
-        # Group train data by timestamp
+        train_logs = load_train_logs()
         for entry in train_logs:
             timestamp = parse_timestamp(entry['timestamp'])
-            if timestamp not in timestamp_groups:
-                timestamp_groups[timestamp] = []
             for train in entry['trains']:
                 message = {
                     "timestamp": timestamp,
@@ -150,22 +146,21 @@ def produce_train_messages():
                     "speed": train['snelheid'],
                     "direction": train['richting']
                 }
-                timestamp_groups[timestamp].append(message)
-
-        # Send messages in batches every 5 seconds
-        for timestamp, messages in timestamp_groups.items():
-            for message in messages:
                 logging.info(f"📤 Sending train data: {message}")
                 producer.send('train-locations', value=message)
+
+                # Create geofence if train has stopped
+                if train['snelheid'] == 0:
+                    tile38.execute_command(f"SET trains {train['ritId']} POINT {train['lat']} {train['lng']}")
+                    logging.info(f"🚧 Geofence set for stopped train {train['ritId']} at ({train['lat']}, {train['lng']})")
+
             producer.flush()
-            logging.info(f"✅ Data for timestamp {timestamp} has been sent successfully")
-            time.sleep(5)  # Optional delay between batches
+            time.sleep(5)
 
     except Exception as e:
         logging.error(f"🚨 Train producer error: {e}")
     finally:
         producer.close()
-
 
 def produce_ambulance_messages():
     """Produce ambulance location messages in batches based on timestamps"""
