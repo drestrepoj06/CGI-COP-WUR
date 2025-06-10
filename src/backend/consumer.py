@@ -9,194 +9,146 @@ from shapely.geometry import Point
 import pandas as pd
 from kafka import KafkaConsumer
 
-# Configure logging
+# Logging config
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
 
-# Kafka configuration
+# Kafka setup
 KAFKA_BROKER = 'kafka:9092'
-TOPIC = 'train-locations'
+TOPICS = ['train-locations', 'ambulance-locations']
+GROUP_ID = 'vehicle-location-consumers'
 
-# Directory to store GeoJSON files
-OUTPUT_FOLDER = "train_location_data"
+# Output folders
+OUTPUT_DIRS = {
+    'train-locations': 'train_location_data',
+    'ambulance-locations': 'ambulance_location_data'
+}
+
+for folder in OUTPUT_DIRS.values():
+    os.makedirs(folder, exist_ok=True)
 
 
 def create_kafka_consumer():
-    """
-    Create a Kafka consumer instance.
-    This consumer will listen to the 'train-locations' topic,
-    deserialize incoming messages from JSON, and start reading from the earliest offset.
-    """
+    """Create KafkaConsumer subscribed to both train and ambulance topics."""
     try:
         consumer = KafkaConsumer(
-            TOPIC,
+            *TOPICS,
             bootstrap_servers=[KAFKA_BROKER],
-            auto_offset_reset='earliest',  # Start reading at the earliest message
+            auto_offset_reset='earliest',
             enable_auto_commit=True,
-            group_id='train-location-consumers',
+            group_id=GROUP_ID,
             value_deserializer=lambda x: json.loads(x.decode('utf-8'))
         )
-        logging.info(f"✅ Successfully connected to Kafka Broker: {KAFKA_BROKER} and subscribed to topic: {TOPIC}")
+        logging.info(f"✅ Connected to Kafka and subscribed to topics: {TOPICS}")
         return consumer
     except Exception as e:
-        logging.error(f"❌ Failed to create Kafka consumer: {e}")
+        logging.error(f"❌ KafkaConsumer creation failed: {e}")
         sys.exit(1)
 
 
-def create_empty_geodf():
-    """
-    Create an empty GeoDataFrame with the predefined columns.
-    The geometry column will store Point objects.
-    """
-    columns = ['timestamp', 'type', 'ritId', 'speed', 'direction', 'geometry']
-    # Create an empty GeoDataFrame with a column for geometry
-    gdf = gpd.GeoDataFrame(columns=columns, geometry='geometry')
-    return gdf
+def create_empty_geodf(columns):
+    """Initialize an empty GeoDataFrame with geometry."""
+    return gpd.GeoDataFrame(columns=columns, geometry='geometry', crs='EPSG:4326')
 
 
-# def update_geodf(geodf, message):
-#     """
-#     Update the GeoDataFrame with data from a single message.
-#     Expects the message dictionary to contain 'lat' and 'lng' values along with other keys.
-#     """
-#     try:
-#         # Extract latitude and longitude; convert them to floats
-#         lat = float(message.get("lat"))
-#         lng = float(message.get("lng"))
-#         # Create a shapely Point; note: Point expects (longitude, latitude)
-#         geometry = Point(lng, lat)
-#         # Create a dictionary row using the message data
-#         row = {
-#             "timestamp": message.get("timestamp"),  # Timestamp can be in any format (e.g., milliseconds)
-#             "type": message.get("type"),
-#             "ritId": message.get("ritId"),
-#             "speed": message.get("speed"),
-#             "direction": message.get("direction"),
-#             "geometry": geometry
-#         }
-#         # Create a new GeoDataFrame for the row
-#         new_row_df = gpd.GeoDataFrame([row], columns=geodf.columns, geometry="geometry")
-#         # Use pd.concat to concatenate the new row with the existing GeoDataFrame
-#         updated_gdf = pd.concat([geodf, new_row_df], ignore_index=True)
-#         return updated_gdf
-#     except Exception as e:
-#         logging.error(f"Error updating GeoDataFrame: {e}")
-#         return geodf
-
-def update_geodf(geodf, message):
-    """
-    Update the GeoDataFrame with data from a single message.
-    Expects the message dictionary to contain 'lat' and 'lng' values along with other keys.
-    The resulting GeoDataFrame will have its CRS set to WGS84 (EPSG:4326).
-    """
+def message_to_georow(msg, topic):
+    """Convert Kafka message to a dictionary row with geometry."""
     try:
-        # Extract latitude and longitude; convert them to floats
-        lat = float(message.get("lat"))
-        lng = float(message.get("lng"))
-        # Create a shapely Point; note: Point expects (longitude, latitude)
+        lat = float(msg.get("lat"))
+        lng = float(msg.get("lng"))
         geometry = Point(lng, lat)
-        # Create a dictionary row using the message data
-        row = {
-            "timestamp": message.get("timestamp"),  # Timestamp can be in any format (e.g., milliseconds)
-            "type": message.get("type"),
-            "ritId": message.get("ritId"),
-            "speed": message.get("speed"),
-            "direction": message.get("direction"),
-            "geometry": geometry
-        }
-        # Create a new GeoDataFrame for the row
-        new_row_df = gpd.GeoDataFrame([row], columns=geodf.columns, geometry="geometry")
-        # Set the CRS for the new row GeoDataFrame to WGS84 (EPSG:4326)
-        new_row_df.set_crs(epsg=4326, inplace=True)
-        
-        # Check and set the CRS for the main GeoDataFrame if not set
-        if geodf.crs is None:
-            geodf.set_crs(epsg=4326, inplace=True)
-        
-        # Use pd.concat to concatenate the new row with the existing GeoDataFrame
-        updated_gdf = pd.concat([geodf, new_row_df], ignore_index=True)
-        return updated_gdf
-    except Exception as e:
-        logging.error(f"Error updating GeoDataFrame: {e}")
-        return geodf
 
-
-def write_geodf_to_file(geodf, timestamp):
-    """
-    Write the GeoDataFrame to a GeoJSON file.
-    The file will be saved in the OUTPUT_FOLDER directory with the filename as the given timestamp.
-    """
-    try:
-        # Ensure the output directory exists
-        os.makedirs(OUTPUT_FOLDER, exist_ok=True)
-        # Build the file path
-        file_path = os.path.join(OUTPUT_FOLDER, f"{timestamp}.json")
-        # Write the GeoDataFrame to a GeoJSON file
-        geodf.to_file(file_path, driver="GeoJSON")
-        logging.info(f"GeoDataFrame for timestamp {timestamp} saved to '{file_path}'")
+        if topic == 'train-locations':
+            row = {
+                "timestamp": msg.get("timestamp"),
+                "type": msg.get("type"),
+                "ritId": msg.get("ritId"),
+                "speed": msg.get("speed"),
+                "direction": msg.get("direction"),
+                "geometry": geometry
+            }
+        else:  # ambulance-locations
+            row = {
+                "timestamp": msg.get("timestamp"),
+                "vehicle_number": msg.get("vehicle_number"),
+                "speed": msg.get("speed"),
+                "heading": msg.get("heading"),
+                "accuracy": msg.get("accuracy"),
+                "type": msg.get("type"),
+                "source": msg.get("source"),
+                "geometry": geometry
+            }
+        return row
     except Exception as e:
-        logging.error(f"Error writing GeoDataFrame to file for timestamp {timestamp}: {e}")
+        logging.error(f"🚨 Failed to parse message into GeoRow: {e}")
+        return None
 
 
 def main():
     consumer = create_kafka_consumer()
-    
-    # Variables to manage grouping by timestamp
-    current_timestamp = None
-    current_geodf = create_empty_geodf()
-    
+
+    # Grouping state for each topic
+    current_timestamps = {
+        'train-locations': None,
+        'ambulance-locations': None
+    }
+
+    current_geodfs = {
+        'train-locations': create_empty_geodf(['timestamp', 'type', 'ritId', 'speed', 'direction', 'geometry']),
+        'ambulance-locations': create_empty_geodf(['timestamp', 'vehicle_number', 'speed', 'heading', 'accuracy', 'type', 'source', 'geometry'])
+    }
+
     try:
-        # Consume messages indefinitely
         for message in consumer:
-            # Deserialize message (value is a dict because of the deserializer)
+            topic = message.topic
             msg = message.value
-            logging.info(f"📥 Received message from '{TOPIC}': {msg}")
-            
-            # Get the timestamp from the message
+            logging.info(f"📥 Received message from '{topic}': {msg}")
+
             msg_timestamp = msg.get("timestamp")
             if msg_timestamp is None:
-                logging.warning("Message does not contain a timestamp; skipping.")
+                logging.warning(f"Message from {topic} missing timestamp; skipping.")
                 continue
-            
-            # Check if the timestamp is new (i.e., different from the current group)
-            if current_timestamp is None:
-                current_timestamp = msg_timestamp
-            
-            # logging.info(f"Current timestamp: {current_timestamp}")
-            # logging.info(f"Message timestamp: {msg_timestamp}")
 
-            if msg_timestamp != current_timestamp:
-                logging.info(f"Switching to new timestamp: {msg_timestamp}")
-                # Write the current group's data to file before switching timestamp groups
-                # write_geodf_to_file(current_geodf, current_timestamp)
-                # logging.info(f"Writing current group to file: {current_timestamp}")
-                # logging.info(f"Current group (timestamp {current_timestamp}) now has {len(current_geodf)} records")
-                # Reset the GeoDataFrame and set the new current timestamp
-                current_geodf = create_empty_geodf()
-                current_timestamp = msg_timestamp
-            
-            # Update the current GeoDataFrame with the new message
-            current_geodf = update_geodf(current_geodf, msg)
-            
-            # current_geodf should be the train_location_data file for frontend 
-            # updates every 5 seconds
+            # Set initial timestamp if needed
+            if current_timestamps[topic] is None:
+                current_timestamps[topic] = msg_timestamp
 
+            # Check for timestamp switch (new group)
+            if msg_timestamp != current_timestamps[topic]:
+                logging.info(f"🕓 {topic} switching to new timestamp group: {msg_timestamp}")
 
-            # Log the number of records in the current GeoDataFrame
-            # logging.info(f"Current group (timestamp {current_timestamp}) now has {len(current_geodf)} records")
-            
-            # Optionally, you can flush data periodically; here we check every record and sleep briefly
+                # Save GeoDataFrame to file
+                out_path = os.path.join(OUTPUT_DIRS[topic], f"{topic.split('-')[0]}_{current_timestamps[topic]}.json")
+                current_geodfs[topic].to_file(out_path, driver='GeoJSON')
+                logging.info(f"💾 Saved {len(current_geodfs[topic])} records to {out_path}")
+
+                # Reset for new group
+                current_geodfs[topic] = create_empty_geodf(current_geodfs[topic].columns)
+                current_timestamps[topic] = msg_timestamp
+
+            # Convert message to GeoRow
+            row = message_to_georow(msg, topic)
+            if row:
+                current_geodfs[topic] = pd.concat(
+                    [current_geodfs[topic], gpd.GeoDataFrame([row], geometry='geometry')],
+                    ignore_index=True
+                )
+
             time.sleep(0.1)
-            
+
     except KeyboardInterrupt:
-        logging.info("Interrupt received, shutting down consumer...")
+        logging.info("🛑 Interrupt received, shutting down consumer...")
     except Exception as e:
-        logging.error(f"Error processing message: {e}")
+        logging.error(f"🚨 Error processing message: {e}")
     finally:
         consumer.close()
-        logging.info("Consumer shutdown complete.")
-        # Write out the last group if it exists
-        # if current_timestamp is not None and len(current_geodf) > 0:
-        #     write_geodf_to_file(current_geodf, current_timestamp)
+        logging.info("🔚 Kafka consumer closed.")
+        # Save any remaining records
+        for topic, gdf in current_geodfs.items():
+            if not gdf.empty and current_timestamps[topic]:
+                out_path = os.path.join(OUTPUT_DIRS[topic], f"{topic.split('-')[0]}_{current_timestamps[topic]}.json")
+                gdf.to_file(out_path, driver='GeoJSON')
+                logging.info(f"💾 Saved final batch of {len(gdf)} records to {out_path}")
+
 
 
 if __name__ == "__main__":
