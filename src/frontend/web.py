@@ -96,6 +96,30 @@ for file in ambulance_files:
 # Prepare JS-friendly object for ambulance data
 ambulance_js_data = json.dumps(ambulance_data)
 
+# Donut chart generator
+def make_pie(input_response, input_text, input_color):
+    if input_color == 'blue':
+        chart_color = ['#29b5e8', '#155F7A']
+    elif input_color == 'green':
+        chart_color = ['#27AE60', '#12783D']
+    elif input_color == 'red':
+        chart_color = ['#E74C3C', '#781F16']
+    
+    source = pd.DataFrame({
+        "Status": ['Available', 'In Use'],
+        "Value": [100 - input_response, input_response],
+    })
+
+    plot = alt.Chart(source).mark_arc().encode(
+        theta="Value:Q",
+        color=alt.Color("Status:N",
+                        scale=alt.Scale(range=chart_color),
+                        legend=alt.Legend(title="Ambulance Status")),
+        tooltip=["Status:N", "Value:Q"]
+    ).properties(width=130, height=130, title=input_text)
+    
+    return plot
+
 # Inject into HTML
 with open("frontend/animated_map.html", "r") as f:
     html = f.read()
@@ -127,12 +151,15 @@ with col[0]:
 
     # Ambulance data table
     st.subheader("Ambulance station availability")
+
     # Sample data
     ambulance_data = pd.DataFrame({
         "Station": ["Maarssen", "Vader Rijndreef", "Diakonessenhuis"],
         "Ambulances": [3, 5, 2],
         "Capacity": [5, 6, 4]
     })
+
+    ambulance_data["In Use"] = ambulance_data["Capacity"] - ambulance_data["Ambulances"]
     
     # Display the table
     st.dataframe(
@@ -153,7 +180,16 @@ with col[0]:
                 width="medium"
             )
         }
-    )
+    )    
+    
+    st.subheader("Ambulance availability")
+    
+    colors = ['red', 'green', 'blue']
+    
+    for i, row in ambulance_data.iterrows():
+        pct = int((row["In Use"] / row["Capacity"]) * 100)
+        st.altair_chart(make_pie(pct, row["Station"], colors[i]), use_container_width=True)
+
 
 # Middle column
 with col[1]:
