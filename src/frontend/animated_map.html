@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>Leaflet Live Train Animation</title>
+  <title>Leaflet Live Vehicle Animation</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>
     html, body, #map {
@@ -15,101 +15,104 @@
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 </head>
 <body>
-
 <div id="map"></div>
 
 <script>
+  // Data injected
+  //__INSERT_ROUTE_HERE__
   //__INSERT_TRAIN_DATA_HERE__
   //__INSERT_RAILS_HERE__
 
-  const SPEED_FACTOR = 1000; // Increase this to speed up playback (e.g., 10 = 10x faster)
-
+  // Initialize map
   const map = L.map('map').setView([52.1, 5.1], 12);
-
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: '© OpenStreetMap contributors'
   }).addTo(map);
 
-  // Add a 10 km radius circle centered at 52.094040, 5.093102
-  const circle = L.circle([52.094040, 5.093102], {
-    radius: 10000, // in meters
-    color: 'black',
-    fillColor: '#f03',
-    fillOpacity: 0
-  }).addTo(map).bindPopup("Study area");
+  // Train animation
+  const trainMarkers = {};
+  let trainFrameIndex = 0;
 
-  const trainMarkers = {}; // Store markers by ritId
-  let currentIndex = 0;
+  function animateTrains() {
+    // Stop if no more frames
+    if (trainFrameIndex >= trainData.length) {
+      console.log("Train animation complete");
+      return;
+    }
 
-  function updateTrains() {
-    const frame = trainData[currentIndex];
-    if (!frame) return;
+    const currentFrame = trainData[trainFrameIndex];
+    const currentTimestamp = currentFrame.timestamp;
 
-    frame.features.forEach(train => {
+    // Update all trains in current frame
+    currentFrame.features.forEach(train => {
       const id = train.ritId;
       const latlng = [train.lat, train.lon];
 
-      if (trainMarkers[id]) {
-        trainMarkers[id].setLatLng(latlng);
-      } else {
-        const marker = L.circleMarker(latlng, {
+      if (!trainMarkers[id]) {
+        // Create new marker
+        trainMarkers[id] = L.circleMarker(latlng, {
           radius: 6,
           color: train.type === "ARR" ? "blue" : "yellow",
           fillColor: train.type === "ARR" ? "blue" : "yellow",
           fillOpacity: 0.8
-        }).addTo(map).bindPopup(`Train ${id} (${train.type})`);
-        trainMarkers[id] = marker;
+        }).addTo(map).bindPopup(`Train ${id}`);
+      } else {
+        // Update existing marker position
+        trainMarkers[id].setLatLng(latlng);
       }
     });
 
-    // This needs to be adjusted to actually display the real time in between each stamp. Now it just does a fixed delay.
-    const nextFrame = trainData[currentIndex + 1];
-    if (nextFrame) {
-      const delay = Math.max(500, (nextFrame.timestamp - frame.timestamp) / SPEED_FACTOR); // ms
-      setTimeout(updateTrains, delay);
+    // Calculate delay until next frame
+    trainFrameIndex++;
+    if (trainFrameIndex < trainData.length) {
+      const nextFrame = trainData[trainFrameIndex];
+      const delay = nextFrame.timestamp - currentTimestamp;
+      
+      // Ensure minimum delay of 100ms for smooth animation
+      setTimeout(animateTrains, Math.max(100, delay));
     }
-
-    currentIndex++;
   }
 
-  updateTrains();
+  // Ambulance animation
+  const ambulanceMarkers = {};
+  let ambulanceFrameIndex = 0;
 
-  const ambulanceMarkers = {}; // Store ambulance markers by vehicle number
-let ambulanceIndex = 0;
-
-function updateAmbulances() {
-  const frame = ambulanceData[ambulanceIndex];
-  if (!frame) return;
-
-  frame.features.forEach(ambulance => {
-    const id = ambulance.vehicle_number;
-    const latlng = [ambulance.lat, ambulance.lon];
-
-    if (ambulanceMarkers[id]) {
-      ambulanceMarkers[id].setLatLng(latlng);
-    } else {
-      const marker = L.circleMarker(latlng, {
-        radius: 6,
-        color: 'red',
-        fillColor: 'red',
-        fillOpacity: 0.8
-      }).addTo(map).bindPopup(`Ambulance ${id}`);
-      ambulanceMarkers[id] = marker;
+  function animateAmbulances() {
+    if (ambulanceFrameIndex >= ambulanceData.length) {
+      console.log("Ambulance animation complete");
+      return;
     }
-  });
 
-  const nextFrame = ambulanceData[ambulanceIndex + 1];
-  if (nextFrame) {
-    const delay = Math.max(500, (nextFrame.timestamp - frame.timestamp) / SPEED_FACTOR);
-    setTimeout(updateAmbulances, delay);
+    const currentFrame = ambulanceData[ambulanceFrameIndex];
+    const currentTimestamp = currentFrame.timestamp;
+
+    currentFrame.features.forEach(ambulance => {
+      const id = ambulance.vehicle_number;
+      const latlng = [ambulance.lat, ambulance.lon];
+
+      if (!ambulanceMarkers[id]) {
+        ambulanceMarkers[id] = L.circleMarker(latlng, {
+          radius: 6,
+          color: 'red',
+          fillColor: 'red',
+          fillOpacity: 0.8
+        }).addTo(map).bindPopup(`Ambulance ${id}`);
+      } else {
+        ambulanceMarkers[id].setLatLng(latlng);
+      }
+    });
+
+    ambulanceFrameIndex++;
+    if (ambulanceFrameIndex < ambulanceData.length) {
+      const nextFrame = ambulanceData[ambulanceFrameIndex];
+      const delay = nextFrame.timestamp - currentTimestamp;
+      setTimeout(animateAmbulances, Math.max(100, delay));
+    }
   }
 
-  ambulanceIndex++;
-}
-
-updateAmbulances();
-
+  // Start animations
+  animateTrains();
+  animateAmbulances();
 </script>
-
 </body>
 </html>

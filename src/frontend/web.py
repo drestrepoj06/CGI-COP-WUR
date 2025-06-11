@@ -48,7 +48,8 @@ for file in train_files:
             "lon": f["geometry"]["coordinates"][0],
             "ritId": f["properties"]["ritId"],
             "speed": f["properties"]["speed"],
-            "type": f["properties"]["type"]
+            "type": f["properties"]["type"],
+            "timestamp": int(f["properties"]["timestamp"]) 
         }
         for f in geojson["features"]
     ]
@@ -57,7 +58,6 @@ for file in train_files:
         "timestamp": timestamp,
         "features": features
     })
-    timestamps.append(timestamp)
 
 # Prepare JS-friendly object for train data
 train_js_data = json.dumps(train_data)
