@@ -104,6 +104,8 @@ def make_pie(input_response, input_text, input_color):
         chart_color = ['#27AE60', '#12783D']
     elif input_color == 'red':
         chart_color = ['#E74C3C', '#781F16']
+    elif input_color == 'yellow':
+        chart_color = ["#F9ED00", "#A79D09"]
     
     source = pd.DataFrame({
         "Status": ['Available', 'In Use'],
@@ -181,7 +183,7 @@ with col[0]:
     
     st.subheader("Ambulance availability")
     
-    colors = ['red', 'green', 'blue']
+    colors = ['red', 'green', 'blue', 'yellow']
     
     for i, row in ambulance_data.iterrows():
         pct = int((row["In Use"] / row["Capacity"]) * 100)
