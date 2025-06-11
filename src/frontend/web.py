@@ -190,7 +190,7 @@ with col[0]:
 
 # Middle column
 with col[1]:
-    st.components.v1.html(html, height=700, scrolling=False) # Show the animated map
+    st.components.v1.html(html, height=500, scrolling=False) # Show the animated map
 
 # Right column
 with col[2]:
