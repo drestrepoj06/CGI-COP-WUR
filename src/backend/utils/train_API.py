@@ -5,8 +5,8 @@ from datetime import datetime
 from geopy.distance import geodesic
 
 API_KEY = "43846b8fddcf4e2bb41def8291de6bf4"
-CENTER = (52.094040, 5.093102)  # Utrecht Overvecht
-MAX_DIST_m = 10000
+CENTER = (52.094040, 5.093102)  
+MAX_DIST_km = 10
 
 headers = {
     "Ocp-Apim-Subscription-Key": API_KEY
@@ -22,7 +22,7 @@ def is_within_radius(train):
     coords = train.get("lat"), train.get("lng")
     if None in coords:
         return False
-    return geodesic(CENTER, coords).km <= MAX_DIST_m
+    return geodesic(CENTER, coords).km <= MAX_DIST_km
 
 while time.time() < end_time:
     try:
