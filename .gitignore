@@ -1,2 +1,4 @@
 venv/
 train_location_data/
+src/frontend/data/ambulance_location_data/
+scr/frontend/data/train_location_data/
