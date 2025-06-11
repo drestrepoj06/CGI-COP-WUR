@@ -63,7 +63,7 @@
           color: train.type === "ARR" ? "blue" : "yellow",
           fillColor: train.type === "ARR" ? "blue" : "yellow",
           fillOpacity: 0.8
-        }).addTo(map).bindPopup(`Train ${id}`);
+        }).addTo(map).bindPopup(`Train ${id} (${train.type})`);
       } else {
         // Update existing marker position
         trainMarkers[id].setLatLng(latlng);
