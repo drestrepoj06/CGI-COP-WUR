@@ -17,8 +17,8 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(mess
 KAFKA_BROKER = 'kafka:9092'
 TOPICS = ['train-locations', 'ambulance-locations']
 
-TRAIN_LOGS_PATH = 'backend/utils/train_logs.json'
-AMB_LOGS_PATH = 'backend/utils/ambulance_logs.json'
+TRAIN_LOGS_PATH = 'utils/train_logs.json'
+AMB_LOGS_PATH = 'utils/ambulance_logs.json'
 TOPICS = ['train-locations', 'ambulance-locations']
 
 
