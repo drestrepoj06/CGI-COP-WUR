@@ -142,21 +142,18 @@ with st.sidebar:
     st.title('COP dashboard')
 
 # Create columns for layout
-col = st.columns((2, 6, 0.5), gap='small')
+col = st.columns((2.5, 5, 1), gap='small')
 
 # Left column
 with col[0]:
-    # Infografic
-    st.metric(label="Number of ...", value="0 ...", delta="1.4%")
-
     # Ambulance data table
     st.subheader("Ambulance station availability")
 
     # Sample data
     ambulance_data = pd.DataFrame({
-        "Station": ["Maarssen", "Vader Rijndreef", "Diakonessenhuis"],
-        "Ambulances": [3, 5, 2],
-        "Capacity": [5, 6, 4]
+        "Station": ["Maarssen", "Vader Rijndreef", "Diakonessenhuis", "On the move"],
+        "Ambulances": [3, 5, 2, 5],
+        "Capacity": [5, 6, 4, 8]
     })
 
     ambulance_data["In Use"] = ambulance_data["Capacity"] - ambulance_data["Ambulances"]
@@ -170,14 +167,14 @@ with col[0]:
         column_config={
             "Station": st.column_config.TextColumn(
                 "Station",
-                width="medium"
+                width="small"
             ),
             "Ambulances": st.column_config.ProgressColumn(
                 "Available",
                 format="%d",  # Display as integer
                 min_value=0,
                 max_value=max(ambulance_data["Capacity"]),
-                width="medium"
+                width="small"
             )
         }
     )    
