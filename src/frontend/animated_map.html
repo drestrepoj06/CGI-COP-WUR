@@ -29,6 +29,14 @@
     attribution: '© OpenStreetMap contributors'
   }).addTo(map);
 
+  // Add a 10 km radius circle centered at 52.094040, 5.093102
+  const circle = L.circle([52.094040, 5.093102], {
+    radius: 10000, // in meters
+    color: 'black',
+    fillColor: '#f03',
+    fillOpacity: 0
+  }).addTo(map).bindPopup("Study area");
+
   // Train animation
   const trainMarkers = {};
   let trainFrameIndex = 0;
@@ -68,7 +76,7 @@
       const nextFrame = trainData[trainFrameIndex];
       const delay = nextFrame.timestamp - currentTimestamp;
       
-      // Ensure minimum delay of 100ms for smooth animation
+      // Minimum delay of 100ms
       setTimeout(animateTrains, Math.max(100, delay));
     }
   }
