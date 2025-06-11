@@ -19,9 +19,8 @@
 
 <script>
   // Data injected
-  //__INSERT_ROUTE_HERE__
   //__INSERT_TRAIN_DATA_HERE__
-  //__INSERT_RAILS_HERE__
+  //__INSERT_AMBULANCE_DATA_HERE__
 
   // Initialize map
   const map = L.map('map').setView([52.1, 5.1], 12);
@@ -42,43 +41,31 @@
   let trainFrameIndex = 0;
 
   function animateTrains() {
-    // Stop if no more frames
     if (trainFrameIndex >= trainData.length) {
       console.log("Train animation complete");
       return;
     }
 
     const currentFrame = trainData[trainFrameIndex];
-    const currentTimestamp = currentFrame.timestamp;
 
-    // Update all trains in current frame
     currentFrame.features.forEach(train => {
       const id = train.ritId;
       const latlng = [train.lat, train.lon];
 
       if (!trainMarkers[id]) {
-        // Create new marker
         trainMarkers[id] = L.circleMarker(latlng, {
           radius: 6,
-          color: train.type === "ARR" ? "blue" : "yellow",
-          fillColor: train.type === "ARR" ? "blue" : "yellow",
+          color: (train.type === "SPR" || train.type === "IC") ? "blue" : "yellow",
+          fillColor: (train.type === "SPR" || train.type === "IC") ? "blue" : "yellow",
           fillOpacity: 0.8
-        }).addTo(map).bindPopup(`Train ${id} (${train.type})`);
+        }).addTo(map).bindPopup(`Train ${id}`);
       } else {
-        // Update existing marker position
         trainMarkers[id].setLatLng(latlng);
       }
     });
 
-    // Calculate delay until next frame
     trainFrameIndex++;
-    if (trainFrameIndex < trainData.length) {
-      const nextFrame = trainData[trainFrameIndex];
-      const delay = nextFrame.timestamp - currentTimestamp;
-      
-      // Minimum delay of 100ms
-      setTimeout(animateTrains, Math.max(100, delay));
-    }
+    setTimeout(animateTrains, 300);  // ← fixed delay here
   }
 
   // Ambulance animation
@@ -92,7 +79,6 @@
     }
 
     const currentFrame = ambulanceData[ambulanceFrameIndex];
-    const currentTimestamp = currentFrame.timestamp;
 
     currentFrame.features.forEach(ambulance => {
       const id = ambulance.vehicle_number;
@@ -111,14 +97,10 @@
     });
 
     ambulanceFrameIndex++;
-    if (ambulanceFrameIndex < ambulanceData.length) {
-      const nextFrame = ambulanceData[ambulanceFrameIndex];
-      const delay = nextFrame.timestamp - currentTimestamp;
-      setTimeout(animateAmbulances, Math.max(100, delay));
-    }
+    setTimeout(animateAmbulances, 300);  // ← fixed delay here
   }
 
-  // Start animations
+  // Start both animations independently
   animateTrains();
   animateAmbulances();
 </script>
