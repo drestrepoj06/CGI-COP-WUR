@@ -5,26 +5,14 @@ import pandas as pd
 from glob import glob
 import altair as alt
 
-
-# Load TomTom route
-with open("frontend/UtrechtTomTomRoute.json") as f:
-    data = json.load(f)
-
-points = data['routes'][0]['legs'][0]['points']
-points_df = pd.DataFrame(points)
-
-# Save coordinates for JS
-route = [(pt['latitude'], pt['longitude']) for pt in points]
-st.session_state['route'] = route  # Optional: if needed later
-
-# st.set_page_config(layout="wide")
-# st.title("Live Train Animation Map")
+# Streamlit app setup
+st.set_page_config(
+    page_title="COP Dashboard",
+    page_icon="🚅",
+    layout="wide",
+    initial_sidebar_state="collapsed",)
 
 
-# Load rails GeoJSON
-with open("frontend/rails.geojson", "r") as f:
-    rails_geojson = json.load(f)
-rails_js = json.dumps(rails_geojson)
 
 # Load and sort all train location files
 train_files = sorted(
@@ -36,65 +24,71 @@ train_files = sorted(
 # Parse all train points, keyed by timestamp
 train_data = []
 timestamps = []
-
-for file in train_files:
-    timestamp = int(os.path.basename(file).replace(".json", "").split("_")[1])
-    with open(file, "r") as f:
-        geojson = json.load(f)
-
-    features = [
-        {
-            "lat": f["geometry"]["coordinates"][1],
-            "lon": f["geometry"]["coordinates"][0],
-            "ritId": f["properties"]["ritId"],
-            "speed": f["properties"]["speed"],
-            "type": f["properties"]["type"],
-            "timestamp": int(f["properties"]["timestamp"]) 
-        }
-        for f in geojson["features"]
-    ]
-
-    train_data.append({
-        "timestamp": timestamp,
-        "features": features
-    })
-
-# Prepare JS-friendly object for train data
-train_js_data = json.dumps(train_data)
-
-# Load and sort all ambulance location files
-ambulance_files = sorted(
-    glob("frontend/data/ambulance_location_data/*.json"),
-    key=lambda f: int(os.path.basename(f).replace(".json", "").split("_")[1])  
-)
-
-ambulance_data = []
-
-for file in ambulance_files:
-    # Extract just the numeric part of the filename
-    timestamp = int(os.path.basename(file).replace(".json", "").split("_")[1])
-    with open(file, "r") as f:
-        geojson = json.load(f)
-
-    features = [
-        {
-            "lat": f["geometry"]["coordinates"][1],
-            "lon": f["geometry"]["coordinates"][0],
-            "vehicle_number": f["properties"]["vehicle_number"],
-            "speed": f["properties"]["speed"],
-            "type": f["properties"]["type"]
-        }
-        for f in geojson["features"]
-    ]
-
-    ambulance_data.append({
-        "timestamp": timestamp,
-        "features": features
-    }
+@st.cache_data
+def load_train_data():
+    train_files = sorted(
+        glob("frontend/data/train_location_data/*.json"),
+        key=lambda f: int(os.path.basename(f).replace(".json", "").split("_")[1])
     )
 
+    train_data = []
+    for file in train_files:
+        timestamp = int(os.path.basename(file).replace(".json", "").split("_")[1])
+        with open(file, "r") as f:
+            geojson = json.load(f)
+        features = [
+            {
+                "lat": f["geometry"]["coordinates"][1],
+                "lon": f["geometry"]["coordinates"][0],
+                "ritId": f["properties"]["ritId"],
+                "speed": f["properties"]["speed"],
+                "type": f["properties"]["type"],
+                "timestamp": int(f["properties"]["timestamp"]) 
+            }
+            for f in geojson["features"]
+        ]
+        train_data.append({
+            "timestamp": timestamp,
+            "features": features
+        })
+    return json.dumps(train_data)
+
+train_js_data = load_train_data()
+
+
+@st.cache_data
+def load_ambulance_data():
+    ambulance_files = sorted(
+        glob("frontend/data/ambulance_location_data/*.json"),
+        key=lambda f: int(os.path.basename(f).replace(".json", "").split("_")[1])  
+    )
+
+    ambulance_data = []
+    for file in ambulance_files:
+        timestamp = int(os.path.basename(file).replace(".json", "").split("_")[1])
+        with open(file, "r") as f:
+            geojson = json.load(f)
+
+        features = [
+            {
+                "lat": f["geometry"]["coordinates"][1],
+                "lon": f["geometry"]["coordinates"][0],
+                "vehicle_number": f["properties"]["vehicle_number"],
+                "speed": f["properties"]["speed"],
+                "type": f["properties"]["type"]
+            }
+            for f in geojson["features"]
+        ]
+
+        ambulance_data.append({
+            "timestamp": timestamp,
+            "features": features
+        })
+
+    return json.dumps(ambulance_data)
+
 # Prepare JS-friendly object for ambulance data
-ambulance_js_data = json.dumps(ambulance_data)
+ambulance_js_data = load_ambulance_data()
 
 # Donut chart generator
 def make_pie(input_response, input_text, input_color):
@@ -126,18 +120,8 @@ def make_pie(input_response, input_text, input_color):
 with open("frontend/animated_map.html", "r") as f:
     html = f.read()
 
-coord_js = str(route).replace("(", "[").replace(")", "]")  # JS-friendly format
-html = html.replace("//__INSERT_ROUTE_HERE__", f"const route = {coord_js};")
 html = html.replace("//__INSERT_TRAIN_DATA_HERE__", f"const trainData = {train_js_data};\nconst ambulanceData = {ambulance_js_data};")
-html = html.replace("//__INSERT_RAILS_HERE__", f"const railsData = {rails_js};")
 
-
-# Streamlit app setup
-st.set_page_config(
-    page_title="COP Dashboard",
-    page_icon="🚅",
-    layout="wide",
-    initial_sidebar_state="collapsed",)
 
 # Sidebar
 with st.sidebar:
