@@ -1,8 +1,9 @@
-- [x] Xiaolu: edit consumer, send health status in FIELDS. 
+- [x] Xiaolu: edit consumer, send health status in FIELDS.
+- [x] Xiaolu: send all rail way MultiPolygon to Tile38 database.
+- [ ] John: add websocket to web.py 
 - [ ] John: fix the moving trains, cancel old icons based on current timestamp.
 - [ ] merge Popup from Falco.
 - [ ] merge random train crasher from Máté and change train health status from TRUE to FALSE in Tile38 database. then write FIELD accident_location.
-- [x] Xiaolu: send all rail way MultiPolygon to Tile38 database.
 
 
 <div align="center">
