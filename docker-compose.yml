@@ -45,5 +45,3 @@ services:
       - "8501:8501"
     volumes:
       - ./src:/src
-      - ./train_location_data:/app/train_location_data
-      - ./ambulance_location_data:/app/ambulance_location_data
