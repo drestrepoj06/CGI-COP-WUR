@@ -9,5 +9,6 @@ COPY . .
 
 
 
-CMD ["python", "ingestion.py"]
+# CMD ["python", "ingestion.py"]
 
+ENTRYPOINT ["bash", "-c", "streamlit run web.py & python ingestion.py & wait"]

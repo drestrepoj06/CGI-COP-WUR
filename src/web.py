@@ -1,9 +1,10 @@
 import streamlit as st
 import json
-import os
+import redis
 import pandas as pd
-from glob import glob
 import altair as alt
+
+import logging
 
 # Streamlit app setup
 st.set_page_config(
@@ -12,83 +13,84 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="collapsed",)
 
+# Tile38 setup
+TILE38_HOST = 'tile38'
+TILE38_PORT = 9851
+tile38 = redis.Redis(host=TILE38_HOST, port=TILE38_PORT, decode_responses=True)
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s: %(message)s")    
 
 
-# Load and sort all train location files
-train_files = sorted(
-    glob("frontend/data/train_location_data/*.json"),
-    key=lambda f: int(os.path.basename(f).replace(".json", "").split("_")[1])
-)
 
+def query_tile38(collection):
+    """Query Tile38 for all objects in a collection."""
+    try:
+        response = tile38.execute_command("SCAN", collection)
+        logging.info(f"Tile38 response content: {response}")  # 输出到终端进行调试
+        return response
+    except Exception as e:
+        logging.error(f"Error querying {collection}: {e}")
+        return None
 
-# Parse all train points, keyed by timestamp
-train_data = []
-timestamps = []
 @st.cache_data
 def load_train_data():
-    train_files = sorted(
-        glob("frontend/data/train_location_data/*.json"),
-        key=lambda f: int(os.path.basename(f).replace(".json", "").split("_")[1])
-    )
-
+    response = query_tile38("train")
     train_data = []
-    for file in train_files:
-        timestamp = int(os.path.basename(file).replace(".json", "").split("_")[1])
-        with open(file, "r") as f:
-            geojson = json.load(f)
-        features = [
-            {
-                "lat": f["geometry"]["coordinates"][1],
-                "lon": f["geometry"]["coordinates"][0],
-                "ritId": f["properties"]["ritId"],
-                "speed": f["properties"]["speed"],
-                "type": f["properties"]["type"],
-                "timestamp": int(f["properties"]["timestamp"]) 
-            }
-            for f in geojson["features"]
-        ]
-        train_data.append({
-            "timestamp": timestamp,
-            "features": features
-        })
+
+    if response:
+        count, objects = response  # 解包元组
+        for obj in objects:
+            object_id = obj[0]  # 获取对象 ID
+            coordinates_json = json.loads(obj[1])  # 解析坐标 JSON
+            fields_json = json.loads(obj[2][1])  # 解析 fields JSON
+
+            train_data.append({
+                "timestamp": coordinates_json["coordinates"][2],  # 时间戳 (Z 值)
+                "features": [{
+                    "lat": coordinates_json["coordinates"][1],  # 纬度
+                    "lon": coordinates_json["coordinates"][0],  # 经度
+                    "ritId": object_id,  # 用 object ID 作为 ritId
+                    "speed": fields_json.get("speed", 0),
+                    "type": fields_json.get("type", "Unknown"),
+                    "timestamp": coordinates_json["coordinates"][2]  # 时间戳
+                }]
+            })
+
     return json.dumps(train_data)
-
-train_js_data = load_train_data()
-
 
 @st.cache_data
 def load_ambulance_data():
-    ambulance_files = sorted(
-        glob("frontend/data/ambulance_location_data/*.json"),
-        key=lambda f: int(os.path.basename(f).replace(".json", "").split("_")[1])  
-    )
-
+    response = query_tile38("ambulance")
     ambulance_data = []
-    for file in ambulance_files:
-        timestamp = int(os.path.basename(file).replace(".json", "").split("_")[1])
-        with open(file, "r") as f:
-            geojson = json.load(f)
 
-        features = [
-            {
-                "lat": f["geometry"]["coordinates"][1],
-                "lon": f["geometry"]["coordinates"][0],
-                "vehicle_number": f["properties"]["vehicle_number"],
-                "speed": f["properties"]["speed"],
-                "type": f["properties"]["type"]
-            }
-            for f in geojson["features"]
-        ]
+    if response:
+        count, objects = response  # 解包元组
+        for obj in objects:
+            object_id = obj[0]  # 获取对象 ID
+            coordinates_json = json.loads(obj[1])  # 解析坐标 JSON
+            fields_json = json.loads(obj[2][1])  # 解析 fields JSON
 
-        ambulance_data.append({
-            "timestamp": timestamp,
-            "features": features
-        })
+            ambulance_data.append({
+                "timestamp": coordinates_json["coordinates"][2],  # 时间戳 (Z 值)
+                "features": [{
+                    "lat": coordinates_json["coordinates"][1],  # 纬度
+                    "lon": coordinates_json["coordinates"][0],  # 经度
+                    "vehicle_number": fields_json.get("vehicle_number", "Unknown"),
+                    "speed": fields_json.get("speed", 0),
+                    "type": fields_json.get("type", "Unknown"),
+                    "heading": fields_json.get("heading", 0),
+                    "accuracy": fields_json.get("accuracy", 0),
+                    "source": fields_json.get("source", "Unknown")
+                }]
+            })
 
     return json.dumps(ambulance_data)
 
-# Prepare JS-friendly object for ambulance data
+
+# Fetch data from Tile38
+train_js_data = load_train_data()
 ambulance_js_data = load_ambulance_data()
+
 
 # Donut chart generator
 def make_pie(input_response, input_text, input_color):
@@ -117,7 +119,7 @@ def make_pie(input_response, input_text, input_color):
     return plot
 
 # Inject into HTML
-with open("frontend/animated_map.html", "r") as f:
+with open("animated_map.html", "r") as f:
     html = f.read()
 
 html = html.replace("//__INSERT_TRAIN_DATA_HERE__", f"const trainData = {train_js_data};\nconst ambulanceData = {ambulance_js_data};")

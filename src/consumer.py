@@ -44,7 +44,7 @@ def main():
         for message in consumer:
             topic = message.topic
             msg = message.value
-            logging.info(f"📥 Received message from '{topic}': {msg}")
+            # logging.info(f"📥 Received message from '{topic}': {msg}")
 
             collection = topic.split('-')[0]  # 'train' or 'ambulance'
 
@@ -71,7 +71,7 @@ def main():
 
                 # logging.info(json.dumps(fields))
                 tile38.execute_command("SET", collection, object_id, "FIELD", "info", json.dumps(fields), "POINT", lat, lng, timestamp_ms)
-                logging.info(f"📡 Sent {collection} object {object_id} with fields {fields} and Z={timestamp_ms} to Tile38.")
+                # logging.info(f"📡 Sent {collection} object {object_id} with fields {fields} and Z={timestamp_ms} to Tile38.")
 
             except Exception as e:
                 logging.error(f"❌ Failed to send point to Tile38: {e}")
