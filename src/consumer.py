@@ -37,49 +37,6 @@ def create_kafka_consumer():
         sys.exit(1)
 
 
-def message_to_geojson_feature(msg, topic):
-    """Convert Kafka message to GeoJSON Feature for Tile38."""
-    try:
-        lat = float(msg.get("lat"))
-        lng = float(msg.get("lng"))
-        geometry = {
-            "type": "Point",
-            "coordinates": [lng, lat]
-        }
-
-        if topic == 'train-locations':
-            properties = {
-                "timestamp": msg.get("timestamp"),
-                "type": msg.get("type"),
-                "ritId": msg.get("ritId"),
-                "speed": msg.get("speed"),
-                "direction": msg.get("direction")
-            }
-            object_id = str(properties["ritId"]) if properties["ritId"] else f"train_{int(time.time()*1000)}"
-        else:  # ambulance-locations
-            properties = {
-                "timestamp": msg.get("timestamp"),
-                "vehicle_number": msg.get("vehicle_number"),
-                "speed": msg.get("speed"),
-                "heading": msg.get("heading"),
-                "accuracy": msg.get("accuracy"),
-                "type": msg.get("type"),
-                "source": msg.get("source")
-            }
-            object_id = str(properties["vehicle_number"]) if properties["vehicle_number"] else f"ambulance_{int(time.time()*1000)}"
-
-        feature = {
-            "type": "Feature",
-            "geometry": geometry,
-            "properties": properties
-        }
-
-        return feature, object_id
-    except Exception as e:
-        logging.error(f"🚨 Failed to convert message to GeoJSON: {e}")
-        return None, None
-
-
 def main():
     consumer = create_kafka_consumer()
 
@@ -95,14 +52,26 @@ def main():
                 lat = float(msg["lat"])
                 lng = float(msg["lng"])
                 timestamp_ms = float(msg["timestamp"])  # e.g., 1749632389587
+                
+                fields = {}
+
                 if topic == "train-locations":
                     object_id = msg.get("ritId", f"train_{int(timestamp_ms)}")
+                    fields["type"] = msg.get("type")
+                    fields["speed"] = msg.get("speed")
+                    fields["direction"] = msg.get("direction")
                 else:  # ambulance-locations
                     object_id = msg.get("vehicle_number", f"ambulance_{int(timestamp_ms)}")
+                    fields["vehicle_number"] = msg.get("vehicle_number")
+                    fields["speed"] = msg.get("speed")
+                    fields["heading"] = msg.get("heading")
+                    fields["accuracy"] = msg.get("accuracy")
+                    fields["type"] = msg.get("type")
+                    fields["source"] = msg.get("source")
 
-                # Send point with Z (timestamp) to Tile38
-                tile38.execute_command("SET", collection, object_id, "POINT", lat, lng, timestamp_ms)
-                logging.info(f"📡 Sent {collection} object {object_id} with Z={timestamp_ms} to Tile38.")
+                # logging.info(json.dumps(fields))
+                tile38.execute_command("SET", collection, object_id, "FIELD", "info", json.dumps(fields), "POINT", lat, lng, timestamp_ms)
+                logging.info(f"📡 Sent {collection} object {object_id} with fields {fields} and Z={timestamp_ms} to Tile38.")
 
             except Exception as e:
                 logging.error(f"❌ Failed to send point to Tile38: {e}")
