@@ -1,8 +1,8 @@
-- [ ] Xiaolu: edit consumer, send health status in FIELDS. 
+- [x] Xiaolu: edit consumer, send health status in FIELDS. 
 - [ ] John: fix the moving trains, cancel old icons based on current timestamp.
 - [ ] merge Popup from Falco.
 - [ ] merge random train crasher add change health status in Tile38 database.
-- [ ] create another separate file triggered by ingestion.py to send all rail way MultiPolygon to Tile38 database.
+- [ ] Xiaolu: create another separate file triggered by ingestion.py to send all rail way MultiPolygon to Tile38 database.
 
 
 <div align="center">
