@@ -155,7 +155,7 @@ def produce_train_messages():
                 #     logging.info(f"🚧 Geofence set for stopped train {train['ritId']} at ({train['lat']}, {train['lng']})")
 
             producer.flush()
-            time.sleep(2)
+            time.sleep(5)
 
     except Exception as e:
         logging.error(f"🚨 Train producer error: {e}")
