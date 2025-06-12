@@ -60,6 +60,7 @@ def main():
                     fields["type"] = msg.get("type")
                     fields["speed"] = msg.get("speed")
                     fields["direction"] = msg.get("direction")
+                    fields["status"] = True
                 else:  # ambulance-locations
                     object_id = msg.get("vehicle_number", f"ambulance_{int(timestamp_ms)}")
                     fields["vehicle_number"] = msg.get("vehicle_number")
@@ -68,7 +69,8 @@ def main():
                     fields["accuracy"] = msg.get("accuracy")
                     fields["type"] = msg.get("type")
                     fields["source"] = msg.get("source")
-
+                    fields["status"] = True
+                    
                 # logging.info(json.dumps(fields))
                 tile38.execute_command("SET", collection, object_id, "FIELD", "info", json.dumps(fields), "POINT", lat, lng, timestamp_ms)
                 # logging.info(f"📡 Sent {collection} object {object_id} with fields {fields} and Z={timestamp_ms} to Tile38.")
