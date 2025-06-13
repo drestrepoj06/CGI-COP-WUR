@@ -66,7 +66,7 @@ while time.time() < end_time:
         speed = round(random.uniform(30, 70), 2)
 
         ambulance_snapshots.append({
-            "id": f"ambulance_{i+1}",
+            "id": f"{i+1}",
             "lat": lat,
             "lng": lng,
             "speed_kmh": speed,
