@@ -199,7 +199,7 @@ def produce_ambulance_messages():
                 # logging.info(f"📤 Sending ambulance data: {message}")
                 producer.send('ambulance-locations', value=message)
             producer.flush()
-            logging.info(f"✅ Ambulance data batch for timestamp {timestamp} sent.")
+            # logging.info(f"✅ Ambulance data batch for timestamp {timestamp} sent.")
             time.sleep(2)  # Optional delay between batches
 
     except Exception as e:
