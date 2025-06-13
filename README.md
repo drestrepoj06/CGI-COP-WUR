@@ -4,7 +4,10 @@
 - [ ] 2a. **Calculate estimated driving time from current ambu to this 'accident_location' based on Tomtom API, change this ambu's FIELD 'status' from TRUE to FALSE. Write the travel path of this ambu to Tile38 DB according to timestamp.**
 - [ ] 2b. Create a Popup window to notify the accident.
 - [ ] 2c. Send **GEOFENCING** on the segments that 'status' are FALSE. Send alert when other trains come across them.
+
 Above should be finished before Wed meeting.
+
+---
 
 - [ ] 3a. Update pie chart.
 - [ ] 4a. Assign color to different road based on traffic density.
