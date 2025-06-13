@@ -1,9 +1,7 @@
 import streamlit as st
 import json
-import redis
 import pandas as pd
 import altair as alt
-
 import logging
 
 # Streamlit app setup
@@ -13,84 +11,7 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="collapsed",)
 
-# Tile38 setup
-TILE38_HOST = 'tile38'
-TILE38_PORT = 9851
-tile38 = redis.Redis(host=TILE38_HOST, port=TILE38_PORT, decode_responses=True)
-
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s: %(message)s")    
-
-
-
-def query_tile38(collection):
-    """Query Tile38 for all objects in a collection."""
-    try:
-        response = tile38.execute_command("SCAN", collection)
-        logging.info(f"Tile38 response content: {response}")  # 输出到终端进行调试
-        return response
-    except Exception as e:
-        logging.error(f"Error querying {collection}: {e}")
-        return None
-
-@st.cache_data
-def load_train_data():
-    response = query_tile38("train")
-    train_data = []
-
-    if response:
-        count, objects = response  # 解包元组
-        for obj in objects:
-            object_id = obj[0]  # 获取对象 ID
-            coordinates_json = json.loads(obj[1])  # 解析坐标 JSON
-            fields_json = json.loads(obj[2][1])  # 解析 fields JSON
-
-            train_data.append({
-                "timestamp": coordinates_json["coordinates"][2],  # 时间戳 (Z 值)
-                "features": [{
-                    "lat": coordinates_json["coordinates"][1],  # 纬度
-                    "lon": coordinates_json["coordinates"][0],  # 经度
-                    "ritId": object_id,  # 用 object ID 作为 ritId
-                    "speed": fields_json.get("speed", 0),
-                    "type": fields_json.get("type", "Unknown"),
-                    "timestamp": coordinates_json["coordinates"][2]  # 时间戳
-                }]
-            })
-
-    return json.dumps(train_data)
-
-@st.cache_data
-def load_ambulance_data():
-    response = query_tile38("ambulance")
-    ambulance_data = []
-
-    if response:
-        count, objects = response  # 解包元组
-        for obj in objects:
-            object_id = obj[0]  # 获取对象 ID
-            coordinates_json = json.loads(obj[1])  # 解析坐标 JSON
-            fields_json = json.loads(obj[2][1])  # 解析 fields JSON
-
-            ambulance_data.append({
-                "timestamp": coordinates_json["coordinates"][2],  # 时间戳 (Z 值)
-                "features": [{
-                    "lat": coordinates_json["coordinates"][1],  # 纬度
-                    "lon": coordinates_json["coordinates"][0],  # 经度
-                    "vehicle_number": fields_json.get("vehicle_number", "Unknown"),
-                    "speed": fields_json.get("speed", 0),
-                    "type": fields_json.get("type", "Unknown"),
-                    "heading": fields_json.get("heading", 0),
-                    "accuracy": fields_json.get("accuracy", 0),
-                    "source": fields_json.get("source", "Unknown")
-                }]
-            })
-
-    return json.dumps(ambulance_data)
-
-
-# Fetch data from Tile38
-train_js_data = load_train_data()
-ambulance_js_data = load_ambulance_data()
-
 
 # Donut chart generator
 def make_pie(input_response, input_text, input_color):
@@ -121,9 +42,6 @@ def make_pie(input_response, input_text, input_color):
 # Inject into HTML
 with open("animated_map.html", "r") as f:
     html = f.read()
-
-html = html.replace("//__INSERT_TRAIN_DATA_HERE__", f"const trainData = {train_js_data};\nconst ambulanceData = {ambulance_js_data};")
-
 
 # Sidebar
 with st.sidebar:
@@ -180,9 +98,4 @@ with col[0]:
 with col[1]:
     st.components.v1.html(html, height=500, scrolling=False) # Show the animated map
 
-# Right column
-with col[2]:
-    st.button("Button 1")
-    st.button("Button 2")
-    st.button("Button 3")
 
