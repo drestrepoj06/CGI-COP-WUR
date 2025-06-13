@@ -128,7 +128,7 @@ with st.sidebar:
     st.title('COP dashboard')
 
 # Create columns for layout
-col = st.columns((2.5, 5, 1), gap='small')
+col = st.columns((2, 6.5), gap='small')
 
 # Left column
 with col[0]:
@@ -176,11 +176,4 @@ with col[0]:
 
 # Middle column
 with col[1]:
-    st.components.v1.html(html, height=500, scrolling=False) # Show the animated map
-
-# Right column
-with col[2]:
-    st.button("Button 1")
-    st.button("Button 2")
-    st.button("Button 3")
-
+    st.components.v1.html(html, height=700, scrolling=False) # Show the animated map
