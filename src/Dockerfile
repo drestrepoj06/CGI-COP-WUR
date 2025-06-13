@@ -11,4 +11,4 @@ COPY . .
 
 # CMD ["python", "ingestion.py"]
 
-ENTRYPOINT ["bash", "-c", "streamlit run web.py & python ingestion.py & wait"]
+ENTRYPOINT ["bash", "-c", "streamlit run web.py & python ingestion.py & exec uvicorn websocket_server:app --host 0.0.0.0 --port 8000"]
