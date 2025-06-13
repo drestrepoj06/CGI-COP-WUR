@@ -1,0 +1,17 @@
+{
+  "name": "vueapp",
+  "version": "1.0.0",
+  "description": "Vue.js Docker 示例",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "start": "vite preview"
+  },
+  "dependencies": {
+    "vue": "^3.3.0"
+  },
+  "devDependencies": {
+    "vite": "^4.5.14",
+    "@vitejs/plugin-vue": "^4.2.0"
+  }
+}

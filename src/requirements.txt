@@ -10,3 +10,4 @@ logging
 websocket-client
 flask 
 flask-socketio
+flask-cors
