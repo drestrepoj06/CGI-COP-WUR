@@ -18,10 +18,6 @@
 <div id="map"></div>
 
 <script>
-  // Data injected
-  //__INSERT_TRAIN_DATA_HERE__
-  //__INSERT_AMBULANCE_DATA_HERE__
-
   // Initialize map
   const map = L.map('map').setView([52.1, 5.1], 12);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -30,33 +26,37 @@
 
   // Add a 10 km radius circle centered at 52.094040, 5.093102
   const circle = L.circle([52.094040, 5.093102], {
-    radius: 10000, // in meters
+    radius: 10000,
     color: 'black',
     fillColor: '#f03',
     fillOpacity: 0
   }).addTo(map);
 
-  // Train animation
+  // Icons can be customized if needed, or use colored circle markers (used here)
   const trainMarkers = {};
-  let trainFrameIndex = 0;
+  const ambulanceMarkers = {};
 
-  function animateTrains() {
-    if (trainFrameIndex >= trainData.length) {
-      console.log("Train animation complete");
-      return;
-    }
+  // Connect to WebSocket server
+  const socket = new WebSocket("ws://localhost:8000/ws/positions");
+  
 
-    const currentFrame = trainData[trainFrameIndex];
+  socket.onopen = () => {
+    console.log("WebSocket connection established");
+  };
 
-    currentFrame.features.forEach(train => {
-      const id = train.ritId;
-      const latlng = [train.lat, train.lon];
+  socket.onmessage = (event) => {
+    const data = JSON.parse(event.data);
+
+    // --- Update Train Positions ---
+    data.train.forEach(train => {
+      const id = train.id;
+      const latlng = [train.lat, train.lng];
 
       if (!trainMarkers[id]) {
         trainMarkers[id] = L.circleMarker(latlng, {
           radius: 6,
-          color: (train.type === "SPR" || train.type === "IC") ? "blue" : "yellow",
-          fillColor: (train.type === "SPR" || train.type === "IC") ? "blue" : "yellow",
+          color: "blue",
+          fillColor: "blue",
           fillOpacity: 0.8
         }).addTo(map).bindPopup(`Train ${id}`);
       } else {
@@ -64,45 +64,29 @@
       }
     });
 
-    trainFrameIndex++;
-    setTimeout(animateTrains, 300);  // ← fixed delay here
-  }
-
-  // Ambulance animation
-  const ambulanceMarkers = {};
-  let ambulanceFrameIndex = 0;
-
-  function animateAmbulances() {
-    if (ambulanceFrameIndex >= ambulanceData.length) {
-      console.log("Ambulance animation complete");
-      return;
-    }
-
-    const currentFrame = ambulanceData[ambulanceFrameIndex];
-
-    currentFrame.features.forEach(ambulance => {
-      const id = ambulance.vehicle_number;
-      const latlng = [ambulance.lat, ambulance.lon];
+    // --- Update Ambulance Positions ---
+    data.ambulance.forEach(amb => {
+      const id = amb.id;
+      const latlng = [amb.lat, amb.lng];
 
       if (!ambulanceMarkers[id]) {
         ambulanceMarkers[id] = L.circleMarker(latlng, {
           radius: 6,
-          color: 'red',
-          fillColor: 'red',
+          color: "red",
+          fillColor: "red",
           fillOpacity: 0.8
         }).addTo(map).bindPopup(`Ambulance ${id}`);
       } else {
         ambulanceMarkers[id].setLatLng(latlng);
       }
     });
+  };
 
-    ambulanceFrameIndex++;
-    setTimeout(animateAmbulances, 300);  // ← fixed delay here
-  }
+  socket.onerror = (error) => {
+    console.error("WebSocket error:", error);
+  };
 
-  // Start both animations independently
-  animateTrains();
-  animateAmbulances();
+  socket.onclose = () => {
+    console.warn("WebSocket connection closed");
+  };
 </script>
-</body>
-</html>
