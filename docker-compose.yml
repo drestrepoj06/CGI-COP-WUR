@@ -42,6 +42,6 @@ services:
       TILE38_HOST: "tile38"
       TILE38_PORT: "9851"
     ports:
-      - "8501:8501"
+      - "5000:5000"
     volumes:
       - ./src:/src
