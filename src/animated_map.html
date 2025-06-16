@@ -65,7 +65,8 @@
   function initMap() {
     const map = L.map('map').setView([52.1, 5.1], 12);
 
-    L.tileLayer('https://api.mapbox.com/styles/v1/mapbox/navigation-day-v1/tiles/{z}/{x}/{y}?access_token=YOUR_MAPBOX_ACCESS_TOKEN', {
+    // Mapbox Light Gray Tile Layer
+    L.tileLayer('https://api.mapbox.com/styles/v1/mapbox/navigation-day-v1/tiles/{z}/{x}/{y}?access_token=pk.eyJ1IjoicnVvdGFsIiwiYSI6ImNtYmh5ZjA5eDAyN3kyanI0cGE2b295MW0ifQ.Cf2xGVOEXF-7hbunq3soyw', {
       tileSize: 512,
       zoomOffset: -1,
       attribution: '© <a href="https://www.mapbox.com/about/maps/">Mapbox</a> © <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>'
