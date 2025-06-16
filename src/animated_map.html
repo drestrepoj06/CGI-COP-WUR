@@ -181,7 +181,78 @@
     };
   }
 
+
+
+
+  function railsegmentWebSocket() {
+    const railsegmentSocket = new WebSocket("ws://localhost:8000/ws/scan");
+
+    railsegmentSocket.onopen = () => {
+        railsegmentSocket.send(JSON.stringify({ collection: "railsegment" })); // Request railsegment data
+    };
+
+    railsegmentSocket.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        console.log("Total Railsegments Received:", data.data.length);
+        console.log("Received Data:", data); // Debugging: Check full response
+
+        if (data.collection === "railsegment" && Array.isArray(data.data)) {
+            data.data.forEach(entry => {
+                try {
+                    const segmentId = entry[0];  // Segment ID
+                    const geojsonStr = entry[1]; // GeoJSON as string
+                    const metadataStr = entry[2][1]; // Extract the correct JSON string
+                    const metadata = JSON.parse(metadataStr); // Parse metadata as JSON
+
+                    const geojson = JSON.parse(geojsonStr); // Convert GeoJSON string to object
+                    const coordinates = geojson.coordinates;
+
+                    if (geojson.type === "Polygon") {
+                        addPolygonToMap(coordinates, segmentId, metadata);
+                    }
+                } catch (error) {
+                    console.error("🚨 Error parsing segment:", entry, error);
+                }
+            });
+        } else {
+            console.warn("🚨 Unexpected response format:", data);
+        }
+    };
+
+    railsegmentSocket.onerror = (error) => console.error("WebSocket Error:", error);
+  }
+
+  function addPolygonToMap(coordinates, segmentId, metadata) {
+    console.log(`Rendering Segment: ${segmentId}`, coordinates);
+
+    // Convert [lng, lat] → [lat, lng] for Leaflet
+    const formattedCoords = coordinates[0].map(coord => [coord[1], coord[0]]);
+
+    // Create the polygon with enhanced transparency
+    const polygon = L.polygon(formattedCoords, {
+        color: "blue",      // Border color
+        fillColor: "blue",  // Fill color
+        weight: 2,          // Border thickness
+        fillOpacity: 0.2    // 🔹 Increased transparency (0.0 to 1.0)
+    }).addTo(map);
+
+    // Bind a click event to show segment info
+    polygon.on("click", () => {
+        const popupContent = `<b>🚆 Segment ID:</b> ${segmentId}<br>
+                              <b>Status:</b> ${metadata.status || "Unknown"}<br>
+                              <b>Shape Length:</b> ${metadata.SHAPE_Length || "N/A"}<br>
+                              <b>Shape Area:</b> ${metadata.SHAPE_Area || "N/A"}`;
+        polygon.bindPopup(popupContent).openPopup();
+    });
+}
+
+
+
+
   initWebSocket();
+  railsegmentWebSocket();
+
+
 </script>
 </body>
 </html>
