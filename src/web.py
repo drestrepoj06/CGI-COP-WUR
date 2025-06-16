@@ -3,6 +3,11 @@ import pandas as pd
 import altair as alt
 import logging
 
+from websocket_server import mark_random_train_as_inactive
+
+import redis
+import asyncio
+
 # Streamlit app setup
 st.set_page_config(
     page_title="RCOP Dashboard",
@@ -103,6 +108,22 @@ def display_availability_charts(ambulance_data):
         usage_percentage = int((row["In Use"] / row["Capacity"]) * 100)
         st.altair_chart(make_pie_chart(usage_percentage, row["Station"], color_options[i]), use_container_width=True)
 
+
+has_marked_train = False
+client = redis.Redis(host="tile38", port=9851, decode_responses=True)
+
+async def mark_train_once():
+    """ Ensures mark_random_train_as_inactive() is only executed once """
+    global has_marked_train
+    if not has_marked_train:
+        try:
+            await mark_random_train_as_inactive(client)  # Must be inside an async function
+            has_marked_train = True  # Set flag to prevent re-execution
+            logging.info("✅ Marked one random train as inactive!")
+        except Exception as e:
+            logging.error(f"[ERROR] mark_random_train_as_inactive() failed: {e}")
+
+
 # Main dashboard layout setup
 def main():
     """
@@ -122,6 +143,9 @@ def main():
 
     # Display animated map in the middle column
     with col[1]:
+        # Run the async function in the event loop
+        asyncio.run(mark_train_once())  # Ensures proper async execution
+        
         st.components.v1.html(load_map_html(), height=500, scrolling=False)
 
 # Run the dashboard

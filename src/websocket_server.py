@@ -216,20 +216,8 @@ def mark_random_train_as_inactive(client):
 
 
 
-has_marked_train = False
-
 @app.websocket("/ws/scan")
 async def scan_websocket(websocket: WebSocket):
-    global has_marked_train
-    
-    # Call mark_random_train_as_inactive() **only once**
-    if not has_marked_train:
-        try:
-            await mark_random_train_as_inactive(client)
-            logger.info("✅ Marked one random train as inactive!")
-            has_marked_train = True  # Set flag to True after execution
-        except Exception as e:
-            logger.error(f"[ERROR] mark_random_train_as_inactive() failed: {e}")
 
     """
     WebSocket endpoint that continuously scans data and sends updates every second,
