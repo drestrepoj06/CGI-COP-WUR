@@ -7,8 +7,8 @@ import random
 
 TOMTOM_API_KEY = "qVEH8Wgf8a02QXAKbeGFxawLEALIefZJ"
 SAVE_PATH = "ambulance_logs.json"
-interval_seconds = 5
-run_minutes = 1
+interval_seconds = 1
+run_minutes = 10
 
 ambulance_origins = [
     (52.121274, 5.035082),
