@@ -2,7 +2,10 @@ from fastapi import FastAPI, WebSocket
 import json
 import asyncio
 import redis
+import random
+import logging
 
+logger = logging.getLogger("uvicorn")
 # Initialize FastAPI and Redis client
 app = FastAPI()
 client = redis.Redis(host="tile38", port=9851, decode_responses=True)
@@ -76,16 +79,76 @@ async def send_positions(websocket: WebSocket):
         print(f"[ERROR] WebSocket transmission error: {e}")
         await websocket.close()
 
+
+async def mark_random_train_as_inactive():
+    try:
+        raw = client.execute_command('SCAN', 'train')
+        data = raw[1]
+
+        if not data:
+            logging.warning("No trains found.")
+            return
+
+        chosen_train = random.choice(data)
+        train_id = chosen_train[0]
+        geometry_str = chosen_train[1]
+        fields_raw = chosen_train[2]
+
+        # Parse and wrap geometry as GeoJSON Feature if needed
+        geometry = json.loads(geometry_str)
+
+        if geometry.get("type") == "Point":
+            # Convert to Feature with 'properties'
+            feature = {
+                "type": "Feature",
+                "geometry": geometry,
+                "properties": {
+                    "status": False
+                }
+            }
+        elif geometry.get("type") == "Feature":
+            feature = geometry
+            if "properties" not in feature:
+                feature["properties"] = {}
+            feature["properties"]["status"] = False
+        else:
+            logging.warning(f"Unsupported GeoJSON type for train {train_id}")
+            return
+
+        # Filter out problematic fields like 'info'
+        safe_fields = []
+        for i in range(0, len(fields_raw), 2):
+            key = str(fields_raw[i])
+            value = str(fields_raw[i + 1])
+            if key.lower() != "info":
+                safe_fields.extend([key, value])
+
+        # SET the updated object
+        client.execute_command(
+            'SET', 'train', train_id,
+            'OBJECT', json.dumps(feature),
+            *safe_fields
+        )
+
+        logging.info(f"✅ Marked train {train_id} as inactive.")
+
+    except Exception as e:
+        logging.error(f"[ERROR] mark_random_train_as_inactive() failed: {e}")
+
+
+
 @app.websocket("/ws/positions")
 async def websocket_endpoint(websocket: WebSocket):
-    """
-    WebSocket endpoint for real-time position updates.
-
-    Parameters:
-    - websocket (WebSocket): FastAPI WebSocket connection.
-    """
-    print("[INFO] WebSocket connected.")
+    logger.info("WebSocket endpoint entered!")
     await websocket.accept()
+    logger.info("WebSocket accepted!")
+
+    try:
+        await mark_random_train_as_inactive()
+        logger.info("After mark_random_train_as_inactive!")
+    except Exception as e:
+        logger.error(f"[ERROR] mark_random_train_as_inactive() failed: {e}")
+
     await send_positions(websocket)
 
 
