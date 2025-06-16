@@ -4,6 +4,7 @@
 - [ ] 2b. Create a Popup window to notify the accident.
 - [ ] 2c. Send **GEOFENCING** on the segments that 'status' are FALSE. Send alert when other trains come across them.
 - [ ] 2d. Change 1km nearby railsegments FIELD 'status' from TRUE to FALSE
+- [ ] 2d. acquire 'railsegment' from Tile38 and lay them over real-time traffic density.
 
 Above should be finished before Wed meeting.
 
