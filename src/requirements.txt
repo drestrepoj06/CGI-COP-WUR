@@ -8,7 +8,5 @@ altair
 redis
 logging
 websockets
-flask 
-flask-socketio
 fastapi
 uvicorn
