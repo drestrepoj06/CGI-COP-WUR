@@ -5,6 +5,8 @@
   <title>Leaflet Live Vehicle Animation</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link href="https://fonts.googleapis.com/css2?family=Source+Sans+Pro&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
   <style>
     html, body, #map {
       height: 100%;
@@ -26,7 +28,6 @@
     }
     .incident-header {
       color: red;
-      font-family: 'Source Sans Pro', sans-serif;
       font-weight: bold;
       font-size: 1.2em;
       margin-bottom: 10px;
@@ -37,13 +38,10 @@
     }
     .incident-table th, .incident-table td {
       padding: 5px;
-      font-family: 'Source Sans Pro', sans-serif;
       text-align: left;
       border-bottom: 1px solid #eee;
     }
   </style>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
-  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 </head>
 <body>
 <div id="map"></div>
@@ -59,97 +57,71 @@
 </div>
 
 <script>
-  // Helper to format timestamps
-  function formatTimestamp(unixMs) {
-    if (!unixMs) return '';
-    const date = new Date(unixMs);
-    return date.toLocaleTimeString();
-  }
-
   let activeIncident = null;
-
-  // Initialize map
-  const map = L.map('map').setView([52.1, 5.1], 12);
-
-  // Mapbox Light Gray Tile Layer
-  L.tileLayer('https://api.mapbox.com/styles/v1/mapbox/navigation-day-v1/tiles/{z}/{x}/{y}?access_token=pk.eyJ1IjoicnVvdGFsIiwiYSI6ImNtYmh5ZjA5eDAyN3kyanI0cGE2b295MW0ifQ.Cf2xGVOEXF-7hbunq3soyw', {
-    tileSize: 512,
-    zoomOffset: -1,
-    attribution: '© <a href="https://www.mapbox.com/about/maps/">Mapbox</a> © <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-  }).addTo(map);
-
-  // Add a 10 km radius circle centered at 52.094040, 5.093102
-  const circle = L.circle([52.094040, 5.093102], {
-    radius: 10000,
-    color: 'black',
-    fillColor: '#f03',
-    fillOpacity: 0
-  }).addTo(map);
-
-  // Marker objects for trains and ambulances
   const trainMarkers = {};
   const ambulanceMarkers = {};
 
-  // Show the incident panel and highlight the train
+  // Initialize Map
+  function initMap() {
+    const map = L.map('map').setView([52.1, 5.1], 12);
+
+    L.tileLayer('https://api.mapbox.com/styles/v1/mapbox/navigation-day-v1/tiles/{z}/{x}/{y}?access_token=YOUR_MAPBOX_ACCESS_TOKEN', {
+      tileSize: 512,
+      zoomOffset: -1,
+      attribution: '© <a href="https://www.mapbox.com/about/maps/">Mapbox</a> © <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+    }).addTo(map);
+
+    L.circle([52.094040, 5.093102], {
+      radius: 10000,
+      color: 'black',
+      fillColor: '#f03',
+      fillOpacity: 0
+    }).addTo(map);
+
+    return map;
+  }
+
+  const map = initMap();
+
+  // Utility function for formatting timestamps
+  function formatTimestamp(unixMs) {
+    return unixMs ? new Date(unixMs).toLocaleTimeString() : '';
+  }
+
+  // Show incident panel and highlight train marker
   function showIncident(trainId) {
-    // Generate incident details
     const passengers = Math.floor(Math.random() * 280) + 20;
-    const ambulances = 1;
-    const prorail = 0;
-    // Update panel
     document.getElementById('train-id').textContent = trainId;
     document.getElementById('passengers').textContent = passengers;
     document.getElementById('medical').textContent = "Reanimation";
-    document.getElementById('ambulances').textContent = ambulances;
-    document.getElementById('prorail').textContent = prorail;
-    // Show panel
+    document.getElementById('ambulances').textContent = 1;
+    document.getElementById('prorail').textContent = 0;
     document.getElementById('incident-panel').style.display = 'block';
-    // Highlight the train marker
+
     if (trainMarkers[trainId]) {
       trainMarkers[trainId].setStyle({color: 'red', fillColor: 'red'});
     }
     activeIncident = trainId;
   }
 
-  // Hide the incident panel and reset the train marker color
+  // Clear incident panel and reset marker color
   function clearIncident(trainData) {
     if (activeIncident && trainMarkers[activeIncident]) {
-      // Find train type for this trainId
       const train = trainData.find(t => t.id === activeIncident);
-      const trainType = train && train.type ? train.type : null;
-      const color = (trainType === "SPR" || trainType === "IC") ? "blue" : "yellow";
-      trainMarkers[activeIncident].setStyle({color: color, fillColor: color});
+      const color = train && (train.type === "SPR" || train.type === "IC") ? "blue" : "yellow";
+      trainMarkers[activeIncident].setStyle({color, fillColor: color});
     }
     document.getElementById('incident-panel').style.display = 'none';
     activeIncident = null;
   }
 
-  // Connect to WebSocket server
-  const socket = new WebSocket("ws://localhost:8000/ws/positions");
-
-  socket.onopen = () => {
-    console.log("WebSocket connection established");
-  };
-
-  socket.onmessage = (event) => {
-    const data = JSON.parse(event.data);
-
-    // --- Incident detection logic ---
-    // Make sure each train object has a .speed property (and .type for color reset)
-    const stoppedTrains = data.train.filter(train => train.speed === 0.1);
-
-    if (stoppedTrains.length > 0 && !activeIncident) {
-      showIncident(stoppedTrains[0].id);
-    } else if (stoppedTrains.length === 0 && activeIncident) {
-      clearIncident(data.train);
-    }
-
-    // --- Update Train Positions ---
-    data.train.forEach(train => {
+  // Update train markers on map
+  function updateTrainPositions(trains) {
+    trains.forEach(train => {
       const id = train.id;
       const latlng = [train.lat, train.lng];
-      const readableTime = train.timestamp ? formatTimestamp(train.timestamp) : '';
-      const popupContent = `🚆 Train ${id}<br/>⏰ ${readableTime}`;
+      const popupContent = `🚆 Train ${id}<br/>⏰ ${formatTimestamp(train.timestamp)}`;
+
       if (!trainMarkers[id]) {
         trainMarkers[id] = L.circleMarker(latlng, {
           radius: 6,
@@ -159,19 +131,20 @@
         }).addTo(map).bindPopup(popupContent);
       } else {
         trainMarkers[id].setLatLng(latlng);
-        // If popup is open, update its content
         if (trainMarkers[id].isPopupOpen()) {
           trainMarkers[id].getPopup().setContent(popupContent);
         }
       }
     });
+  }
 
-    // --- Update Ambulance Positions ---
-    data.ambulance.forEach(amb => {
+  // Update ambulance markers on map
+  function updateAmbulancePositions(ambulances) {
+    ambulances.forEach(amb => {
       const id = amb.id;
       const latlng = [amb.lat, amb.lng];
-      const readableTime = amb.timestamp ? formatTimestamp(amb.timestamp) : '';
-      const popupContent = `🚑 Ambulance ${id}<br/>⏰ ${readableTime}`;
+      const popupContent = `🚑 Ambulance ${id}<br/>⏰ ${formatTimestamp(amb.timestamp)}`;
+
       if (!ambulanceMarkers[id]) {
         ambulanceMarkers[id] = L.circleMarker(latlng, {
           radius: 6,
@@ -181,21 +154,33 @@
         }).addTo(map).bindPopup(popupContent);
       } else {
         ambulanceMarkers[id].setLatLng(latlng);
-        // If popup is open, update its content
         if (ambulanceMarkers[id].isPopupOpen()) {
           ambulanceMarkers[id].getPopup().setContent(popupContent);
         }
       }
     });
-  };
+  }
 
-  socket.onerror = (error) => {
-    console.error("WebSocket error:", error);
-  };
+  // WebSocket connection to fetch live positions
+  function initWebSocket() {
+    const socket = new WebSocket("ws://localhost:8000/ws/positions");
 
-  socket.onclose = () => {
-    console.warn("WebSocket connection closed");
-  };
+    socket.onmessage = event => {
+      const data = JSON.parse(event.data);
+      const stoppedTrains = data.train.filter(train => train.speed === 0.1);
+
+      if (stoppedTrains.length > 0 && !activeIncident) {
+        showIncident(stoppedTrains[0].id);
+      } else if (stoppedTrains.length === 0 && activeIncident) {
+        clearIncident(data.train);
+      }
+
+      updateTrainPositions(data.train);
+      updateAmbulancePositions(data.ambulance);
+    };
+  }
+
+  initWebSocket();
 </script>
 </body>
 </html>

@@ -17,7 +17,7 @@ TILE38_HOST = 'tile38'
 TILE38_PORT = 9851
 tile38 = redis.Redis(host=TILE38_HOST, port=TILE38_PORT, decode_responses=True)
 
-RAIL_SEGMENTS_JSON_FILE_PATH = "UtrechtRailsSegments.geojson"
+RAIL_SEGMENTS_JSON_FILE_PATH = "utils/UtrechtRailsSegments.geojson"
 
 
 def store_rail_segments():
