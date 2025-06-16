@@ -14,50 +14,12 @@
       padding: 0;
       font-family: 'Source Sans Pro', sans-serif;
     }
-    #incident-panel {
-      position: absolute;
-      top: 20px;
-      right: 20px;
-      z-index: 1000;
-      background: white;
-      padding: 15px;
-      border-radius: 8px;
-      box-shadow: 0 0 10px rgba(0,0,0,0.3);
-      max-width: 300px;
-      display: none;
-    }
-    .incident-header {
-      color: red;
-      font-weight: bold;
-      font-size: 1.2em;
-      margin-bottom: 10px;
-    }
-    .incident-table {
-      width: 100%;
-      border-collapse: collapse;
-    }
-    .incident-table th, .incident-table td {
-      padding: 5px;
-      text-align: left;
-      border-bottom: 1px solid #eee;
-    }
   </style>
 </head>
 <body>
 <div id="map"></div>
-<div id="incident-panel">
-  <div class="incident-header">🚨 TRAIN INCIDENT DETECTED</div>
-  <table class="incident-table" id="incident-details">
-    <tr><th>Train ID</th><td id="train-id">-</td></tr>
-    <tr><th>Passengers</th><td id="passengers">-</td></tr>
-    <tr><th>Medical Emergency</th><td id="medical">-</td></tr>
-    <tr><th>Ambulances Needed</th><td id="ambulances">-</td></tr>
-    <tr><th>ProRail Teams</th><td id="prorail">-</td></tr>
-  </table>
-</div>
 
 <script>
-  let activeIncident = null;
   const trainMarkers = {};
   const ambulanceMarkers = {};
 
@@ -73,7 +35,7 @@
     }).addTo(map);
 
     L.circle([52.094040, 5.093102], {
-      radius: 10000,
+      radius: 6150,
       color: 'black',
       fillColor: '#f03',
       fillOpacity: 0
@@ -87,33 +49,6 @@
   // Utility function for formatting timestamps
   function formatTimestamp(unixMs) {
     return unixMs ? new Date(unixMs).toLocaleTimeString() : '';
-  }
-
-  // Show incident panel and highlight train marker
-  function showIncident(trainId) {
-    const passengers = Math.floor(Math.random() * 280) + 20;
-    document.getElementById('train-id').textContent = trainId;
-    document.getElementById('passengers').textContent = passengers;
-    document.getElementById('medical').textContent = "Reanimation";
-    document.getElementById('ambulances').textContent = 1;
-    document.getElementById('prorail').textContent = 0;
-    document.getElementById('incident-panel').style.display = 'block';
-
-    if (trainMarkers[trainId]) {
-      trainMarkers[trainId].setStyle({color: 'red', fillColor: 'red'});
-    }
-    activeIncident = trainId;
-  }
-
-  // Clear incident panel and reset marker color
-  function clearIncident(trainData) {
-    if (activeIncident && trainMarkers[activeIncident]) {
-      const train = trainData.find(t => t.id === activeIncident);
-      const color = train && (train.type === "SPR" || train.type === "IC") ? "blue" : "yellow";
-      trainMarkers[activeIncident].setStyle({color, fillColor: color});
-    }
-    document.getElementById('incident-panel').style.display = 'none';
-    activeIncident = null;
   }
 
   // Update train markers on map
@@ -168,14 +103,6 @@
 
     socket.onmessage = event => {
       const data = JSON.parse(event.data);
-      const stoppedTrains = data.train.filter(train => train.speed === 0.1);
-
-      if (stoppedTrains.length > 0 && !activeIncident) {
-        showIncident(stoppedTrains[0].id);
-      } else if (stoppedTrains.length === 0 && activeIncident) {
-        clearIncident(data.train);
-      }
-
       updateTrainPositions(data.train);
       updateAmbulancePositions(data.ambulance);
     };
