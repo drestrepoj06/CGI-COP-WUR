@@ -108,6 +108,7 @@ def main():
     """
     Initializes and renders the dashboard with sidebar, tables, and charts.
     """
+    
     # Sidebar with dashboard title
     with st.sidebar:
         st.title("RCOP Dashboard")

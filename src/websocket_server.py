@@ -105,12 +105,10 @@ def create_incident(client, train_id, location, description="Incident reported",
         # Instead of packing all into one field, pass individual fields to Tile38 SET
         # Note: Tile38 fields are strings; convert as needed
         client.execute_command(
-            "SET", "incidents", incident_id,
-            "FIELD", "train_id", str(train_id),
+            "SET", "broken_train", incident_id,
             "FIELD", "severity", severity,
-            "FIELD", "status", "active",
+            "FIELD", "status", "inactive",
             "FIELD", "timestamp", str(incident_time),
-            "FIELD", "description", description,
             "OBJECT", geometry_json
         )
         logger.info(f"Created incident {incident_id} for train {train_id}.")
@@ -144,12 +142,7 @@ def mark_random_train_as_inactive(client):
         logger.error(f"Error scanning trains: {e}", exc_info=True)
         return False
 
-    if not train_ids:
-        logger.warning("No trains found to update.")
-        return False
-
-    selected_id = random.choice(train_ids)
-    logger.info(f"Selected train: {selected_id}")
+    selected_id = random.choice(train_ids) # Selected train: {selected_id}
 
     try:
         response = client.execute_command("GET", "train", selected_id, "WITHFIELDS", "OBJECT")
@@ -207,19 +200,19 @@ def mark_random_train_as_inactive(client):
 
 
 
-@app.websocket("/ws/positions")
-async def websocket_endpoint(websocket: WebSocket):
-    logger.info("WebSocket endpoint entered!")
-    await websocket.accept()
-    logger.info("WebSocket accepted!")
+# @app.websocket("/ws/positions")
+# async def websocket_endpoint(websocket: WebSocket):
+#     logger.info("WebSocket endpoint entered!")
+#     await websocket.accept()
+#     logger.info("WebSocket accepted!")
 
-    try:
-        await mark_random_train_as_inactive()
-        logger.info("After mark_random_train_as_inactive!")
-    except Exception as e:
-        logger.error(f"[ERROR] mark_random_train_as_inactive() failed: {e}")
+#     try:
+#         await mark_random_train_as_inactive(client)
+#         logger.info("After mark_random_train_as_inactive!")
+#     except Exception as e:
+#         logger.error(f"[ERROR] mark_random_train_as_inactive() failed: {e}")
 
-    await send_positions(websocket)
+#     await send_positions(websocket)
 
 
 
@@ -232,27 +225,19 @@ async def scan_websocket(websocket: WebSocket):
     # Call mark_random_train_as_inactive() **only once**
     if not has_marked_train:
         try:
-            await mark_random_train_as_inactive()
+            await mark_random_train_as_inactive(client)
             logger.info("✅ Marked one random train as inactive!")
             has_marked_train = True  # Set flag to True after execution
         except Exception as e:
             logger.error(f"[ERROR] mark_random_train_as_inactive() failed: {e}")
 
-
     """
     WebSocket endpoint that continuously scans data and sends updates every second,
     ensuring each full SCAN query is completed before restarting.
     """
-    
+
     print("[INFO] WebSocket connected.")
     await websocket.accept()
-
-    try:
-        await mark_random_train_as_inactive()
-        logger.info("After mark_random_train_as_inactive!")
-    except Exception as e:
-        logger.error(f"[ERROR] mark_random_train_as_inactive() failed: {e}")
-
 
     try:
         request_data = await websocket.receive_text()  # Receive collection request once
