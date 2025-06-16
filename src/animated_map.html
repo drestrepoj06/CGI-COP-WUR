@@ -51,62 +51,124 @@
     return unixMs ? new Date(unixMs).toLocaleTimeString() : '';
   }
 
-  // Update train markers on map
   function updateTrainPositions(trains) {
     trains.forEach(train => {
-      const id = train.id;
-      const latlng = [train.lat, train.lng];
-      const popupContent = `🚆 Train ${id}<br/>⏰ ${formatTimestamp(train.timestamp)}`;
+        try {
+            const id = train[0]; // Extract Train ID
+            const geojson = JSON.parse(train[1]); // Parse GeoJSON string
+            const coordinates = geojson.coordinates; // Extract coordinates (lng, lat)
+            const timestamp = train[2][1]; // Extract timestamp
 
-      if (!trainMarkers[id]) {
-        trainMarkers[id] = L.circleMarker(latlng, {
-          radius: 6,
-          color: "blue",
-          fillColor: "blue",
-          fillOpacity: 0.8
-        }).addTo(map).bindPopup(popupContent);
-      } else {
-        trainMarkers[id].setLatLng(latlng);
-        if (trainMarkers[id].isPopupOpen()) {
-          trainMarkers[id].getPopup().setContent(popupContent);
+            // Convert [lng, lat] → [lat, lng] for Leaflet
+            const latlng = [coordinates[1], coordinates[0]];
+
+            const popupContent = `🚆 Train ${id}<br/>⏰ ${formatTimestamp(timestamp)}`;
+
+            if (!trainMarkers[id]) {
+                trainMarkers[id] = L.circleMarker(latlng, {
+                    radius: 6,
+                    color: "blue",
+                    fillColor: "blue",
+                    fillOpacity: 0.8
+                }).addTo(map).bindPopup(popupContent);
+            } else {
+                trainMarkers[id].setLatLng(latlng);
+                if (trainMarkers[id].isPopupOpen()) {
+                    trainMarkers[id].getPopup().setContent(popupContent);
+                }
+            }
+        } catch (error) {
+            console.error("🚨 Error parsing train data:", train, error);
         }
-      }
     });
   }
 
-  // Update ambulance markers on map
   function updateAmbulancePositions(ambulances) {
     ambulances.forEach(amb => {
-      const id = amb.id;
-      const latlng = [amb.lat, amb.lng];
-      const popupContent = `🚑 Ambulance ${id}<br/>⏰ ${formatTimestamp(amb.timestamp)}`;
+        try {
+            const id = amb[0]; // Extract Ambulance ID
+            const geojson = JSON.parse(amb[1]); // Parse GeoJSON string
+            const coordinates = geojson.coordinates; // Extract coordinates (lng, lat)
+            const timestamp = amb[2][1]; // Extract timestamp
 
-      if (!ambulanceMarkers[id]) {
-        ambulanceMarkers[id] = L.circleMarker(latlng, {
-          radius: 6,
-          color: "red",
-          fillColor: "red",
-          fillOpacity: 0.8
-        }).addTo(map).bindPopup(popupContent);
-      } else {
-        ambulanceMarkers[id].setLatLng(latlng);
-        if (ambulanceMarkers[id].isPopupOpen()) {
-          ambulanceMarkers[id].getPopup().setContent(popupContent);
+            // Convert [lng, lat] → [lat, lng] for Leaflet
+            const latlng = [coordinates[1], coordinates[0]];
+
+            const popupContent = `🚑 Ambulance ${id}<br/>⏰ ${formatTimestamp(timestamp)}`;
+
+            if (!ambulanceMarkers[id]) {
+                ambulanceMarkers[id] = L.circleMarker(latlng, {
+                    radius: 6,
+                    color: "red",
+                    fillColor: "red",
+                    fillOpacity: 0.4
+                }).addTo(map).bindPopup(popupContent);
+            } else {
+                ambulanceMarkers[id].setLatLng(latlng);
+                if (ambulanceMarkers[id].isPopupOpen()) {
+                    ambulanceMarkers[id].getPopup().setContent(popupContent);
+                }
+            }
+        } catch (error) {
+            console.error("🚨 Error parsing ambulance data:", amb, error);
         }
-      }
     });
   }
 
-  // WebSocket connection to fetch live positions
-  function initWebSocket() {
-    const socket = new WebSocket("ws://localhost:8000/ws/positions");
+  // // WebSocket connection to fetch live positions
+  // function initWebSocket() {
+  //   const socket = new WebSocket("ws://localhost:8000/ws/positions");
 
-    socket.onmessage = event => {
-      const data = JSON.parse(event.data);
-      updateTrainPositions(data.train);
-      updateAmbulancePositions(data.ambulance);
+  //   socket.onmessage = event => {
+  //     const data = JSON.parse(event.data);
+  //     updateTrainPositions(data.train);
+  //     updateAmbulancePositions(data.ambulance);
+  //   };
+  // }
+
+  function initTrainWebSocket() {
+    const trainSocket = new WebSocket("ws://localhost:8000/ws/scan");
+
+    trainSocket.onopen = () => {
+        trainSocket.send(JSON.stringify({ collection: "train" })); // Request train data
     };
+
+    trainSocket.onmessage = event => {
+        const data = JSON.parse(event.data);
+        console.log("🚆 Train Data Received:", data);
+        
+        if (data.collection === "train") {
+            updateTrainPositions(data.data); // Update train markers
+        }
+    };
+
+    trainSocket.onerror = error => console.error("🚨 Train WebSocket Error:", error);
   }
+
+  function initAmbulanceWebSocket() {
+      const ambulanceSocket = new WebSocket("ws://localhost:8000/ws/scan");
+
+      ambulanceSocket.onopen = () => {
+          ambulanceSocket.send(JSON.stringify({ collection: "ambulance" })); // Request ambulance data
+      };
+
+      ambulanceSocket.onmessage = event => {
+          const data = JSON.parse(event.data);
+          console.log("🚑 Ambulance Data Received:", data);
+          
+          if (data.collection === "ambulance") {
+              updateAmbulancePositions(data.data); // Update ambulance markers
+          }
+      };
+
+      ambulanceSocket.onerror = error => console.error("🚨 Ambulance WebSocket Error:", error);
+  }
+
+  // Initialize both WebSocket connections
+  initTrainWebSocket();
+  initAmbulanceWebSocket();
+
+
 
 
 
@@ -120,8 +182,8 @@
 
     railsegmentSocket.onmessage = (event) => {
         const data = JSON.parse(event.data);
-        console.log("Total Railsegments Received:", data.data.length);
-        console.log("Received Data:", data); // Debugging: Check full response
+        // console.log("Total Railsegments Received:", data.data.length);
+        // console.log("Received Data:", data); // Debugging: Check full response
 
         if (data.collection === "railsegment" && Array.isArray(data.data)) {
             data.data.forEach(entry => {
@@ -150,7 +212,7 @@
   }
 
   function addPolygonToMap(coordinates, segmentId, metadata) {
-    console.log(`Rendering Segment: ${segmentId}`, coordinates);
+    // console.log(`Rendering Segment: ${segmentId}`, coordinates);
 
     // Convert [lng, lat] → [lat, lng] for Leaflet
     const formattedCoords = coordinates[0].map(coord => [coord[1], coord[0]]);
@@ -160,8 +222,13 @@
         color: "blue",      // Border color
         fillColor: "blue",  // Fill color
         weight: 2,          // Border thickness
-        fillOpacity: 0.2    // 🔹 Increased transparency (0.0 to 1.0)
+        fillOpacity: 0.2    // Increased transparency
     }).addTo(map);
+
+    // Automatically remove the polygon after 0.5 seconds
+    setTimeout(() => {
+        map.removeLayer(polygon);
+    }, 500);
 
     // Bind a click event to show segment info
     polygon.on("click", () => {
@@ -176,7 +243,7 @@
 
 
 
-  initWebSocket();
+  // initWebSocket();
   railsegmentWebSocket();
 
 
