@@ -152,6 +152,9 @@
   function addPolygonToMap(coordinates, segmentId, metadata) {
     console.log(`Rendering Segment: ${segmentId}`, coordinates);
 
+    // Extract only the numbers from segmentId (e.g., "segment_23" → "23")
+    const segmentNumber = segmentId.match(/\d+/) ? segmentId.match(/\d+/)[0] : segmentId;
+
     // Convert [lng, lat] → [lat, lng] for Leaflet
     const formattedCoords = coordinates[0].map(coord => [coord[1], coord[0]]);
 
@@ -165,16 +168,13 @@
 
     // Bind a click event to show segment info
     polygon.on("click", () => {
-        const popupContent = `<b>🚆 Segment ID:</b> ${segmentId}<br>
+        const popupContent = `<b>🚆 Segment ID:</b> ${segmentNumber}<br>
                               <b>Status:</b> ${metadata.status || "Unknown"}<br>
                               <b>Shape Length:</b> ${metadata.SHAPE_Length || "N/A"}<br>
                               <b>Shape Area:</b> ${metadata.SHAPE_Area || "N/A"}`;
         polygon.bindPopup(popupContent).openPopup();
     });
 }
-
-
-
 
   initWebSocket();
   railsegmentWebSocket();

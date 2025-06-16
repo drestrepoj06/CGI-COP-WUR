@@ -10,3 +10,4 @@ logging
 websockets
 fastapi
 uvicorn
+plotly
