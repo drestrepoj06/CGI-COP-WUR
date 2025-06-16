@@ -36,8 +36,6 @@ Follow these simple steps to set up the system:
 1. Clone the repository:
   ```bash
   git https://github.com/drestrepoj06/CGI-COP-WUR.git
-  cd CGI-COP-WUR
-  docker compose up
   ```
 2. Navigate to the project folder:
   ```bash
@@ -50,7 +48,7 @@ Follow these simple steps to set up the system:
 
 🚀 Then open localhost:8501 to start monitoring the lovely Railway Station **Utrecht Centraal**.
 
-## Contributors
+## 🤝 Contributors
 
 Xiaolu Yan, Jhon Restrepo, Falco Latour, Máté Török, Thijs Vons​
 
@@ -64,5 +62,5 @@ Xiaolu Yan, Jhon Restrepo, Falco Latour, Máté Török, Thijs Vons​
 
 The RCOP project was made possible with the help of many:
 
-- Robert Voûte, Albert Jan van der Werp, Hessel Prins from CGI
-- Sytze de Bruin & Jascha Grübel from WUR-GRS
+- `Robert Voûte`, `Albert Jan van der Werp`, `Hessel Prins` from CGI
+- `Sytze de Bruin`, `Jascha Grübel` from WUR-GRS
