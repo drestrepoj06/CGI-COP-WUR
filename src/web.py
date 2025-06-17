@@ -142,6 +142,14 @@ async def main():
     with st.sidebar:
         st.title("RCOP Dashboard")
 
+    # Initialize session states
+    if 'button_disabled' not in st.session_state:
+        st.session_state['button_disabled'] = False
+    if 'show_incident' not in st.session_state:
+        st.session_state['show_incident'] = False
+    if 'show_reset_success' not in st.session_state:
+        st.session_state['show_reset_success'] = False
+
     col = st.columns((2.5, 5, 1), gap="small")
 
     # Left column: ambulance data and charts
@@ -157,38 +165,44 @@ async def main():
     # Right column: Incident/Train control
     with col[2]:
         st.markdown("### Train Control")
-        
-        # Button to stop a random train
-        if st.button("🛑 Stop a Random Train"):
+       
+        # Button to stop a random train (simulate incident)
+        if st.button(
+            "🛑 Simulate an indicent (stop a random train)",
+            disabled=st.session_state['button_disabled'],
+            key="stop_train_button"
+        ):
             st.session_state['incident_data'] = None
+            st.session_state['button_disabled'] = True
+            st.session_state['show_reset_success'] = False  # Clear reset success message
             incident = stop_random_train()
             if incident:
                 st.session_state['incident_data'] = incident
                 st.session_state['train_stop_result'] = "success"
+                st.session_state['show_incident'] = True
             else:
                 st.session_state['train_stop_result'] = "fail"
             st.rerun()
-        
+       
         # Button to reset all trains
-        if st.button("🔄 Reset All Trains"):
+        if st.button("🔄 Reset all trains"):
             st.session_state['reset_result'] = reset_all_trains(client)
+            st.session_state['button_disabled'] = False
+            st.session_state['show_incident'] = False  # Clear incident message
+            st.session_state['show_reset_success'] = True
             st.rerun()
 
-        train_stop_result = st.session_state.get('train_stop_result', None)
-        incident_data = st.session_state.get('incident_data', None)
-        reset_result = st.session_state.get('reset_result', None)
-
-        if train_stop_result == "success" and incident_data:
+        # Display incident notification if active
+        if st.session_state.get('show_incident', False) and st.session_state.get('incident_data'):
             st.success("An incident was simulated!")
-
-            coords = incident_data["location"].get("coordinates", [])
+            coords = st.session_state['incident_data']["location"].get("coordinates", [])
             lng, lat = coords[0], coords[1]
             timestamp = int(coords[2]) if len(coords) > 2 else None
 
             # Create cleaned-up incident dict
             clean_incident = {
-                "train_id": incident_data["train_id"],
-                "severity": incident_data["severity"],
+                "train_id": st.session_state['incident_data']["train_id"],
+                "severity": st.session_state['incident_data']["severity"],
                 "lat": lat,
                 "lng": lng,
                 "timestamp": timestamp
@@ -205,15 +219,10 @@ async def main():
             **Location**: `{clean_incident['lat']}, {clean_incident['lng']}`  
             **Timestamp**: `{readable_time} UTC`
             """)
-           
-        elif train_stop_result == "fail":
-            st.error("Failed to mark a random train as inactive.")
-        
-        if reset_result == "success":
-            st.success("All trains have been reset to active status!")
-        elif reset_result == "fail":
-            st.error("Failed to reset trains.")
 
+        # Display reset success notification if active
+        if st.session_state.get('show_reset_success', False):
+            st.success("All trains have been reset to active status!")
         st.markdown("---")
         st.info("Use the buttons above to simulate incidents or reset trains.")
 
