@@ -84,26 +84,19 @@ async def send_positions(websocket: WebSocket):
 
 
 def create_incident(client, train_id, location, description="Incident reported", severity="high", train_timestamp=None):
-    # Generate a unique incident ID based on train_id and current time
     incident_id = f"incident_{train_id}_{datetime.datetime.utcnow().strftime('%Y%m%d%H%M%S%f')}"
 
-    # Use train timestamp if provided; else use current UTC time in ISO format
     if train_timestamp:
-        # You can convert train_timestamp to ISO string if needed here
         incident_time = train_timestamp
     else:
         incident_time = datetime.datetime.utcnow().isoformat() + "Z"
 
-    # Validate location is GeoJSON-like dict
     if not isinstance(location, dict) or "type" not in location or "coordinates" not in location:
         logger.error(f"Invalid location data passed to create_incident: {location}")
-        return False
+        return None
 
     try:
         geometry_json = json.dumps(location)
-        
-        # Instead of packing all into one field, pass individual fields to Tile38 SET
-        # Note: Tile38 fields are strings; convert as needed
         client.execute_command(
             "SET", "broken_train", incident_id,
             "FIELD", "severity", severity,
@@ -112,10 +105,17 @@ def create_incident(client, train_id, location, description="Incident reported",
             "OBJECT", geometry_json
         )
         logger.info(f"Created incident {incident_id} for train {train_id}.")
-        return True
+        return {
+            "incident_id": incident_id,
+            "train_id": train_id,
+            "location": location,
+            "severity": severity,
+            "description": description,
+            "timestamp": incident_time
+        }
     except Exception as e:
         logger.error(f"Failed to create incident {incident_id}: {e}", exc_info=True)
-        return False
+        return None
 
 def mark_random_train_as_inactive(client):
     try:
@@ -189,31 +189,12 @@ def mark_random_train_as_inactive(client):
         client.execute_command(*set_args)
         logger.info(f"Updated train {selected_id} status to False.")
 
-        # Create an incident for this train
-        create_incident(client, selected_id, train_obj["object"], description="Train marked inactive due to incident")
+        incident = create_incident(client, selected_id, train_obj["object"], description="Train marked inactive due to incident")
+        return incident  # Return incident dictionary
 
     except Exception as e:
         logger.error(f"Failed to update train {selected_id}: {e}", exc_info=True)
-        return False
-
-    return True
-
-
-
-# @app.websocket("/ws/positions")
-# async def websocket_endpoint(websocket: WebSocket):
-#     logger.info("WebSocket endpoint entered!")
-#     await websocket.accept()
-#     logger.info("WebSocket accepted!")
-
-#     try:
-#         await mark_random_train_as_inactive(client)
-#         logger.info("After mark_random_train_as_inactive!")
-#     except Exception as e:
-#         logger.error(f"[ERROR] mark_random_train_as_inactive() failed: {e}")
-
-#     await send_positions(websocket)
-
+        return None
 
 
 @app.websocket("/ws/scan")
