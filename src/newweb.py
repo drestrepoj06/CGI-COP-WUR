@@ -2,12 +2,11 @@ import streamlit as st
 import pandas as pd
 import altair as alt
 import logging
-import redis
-from datetime import datetime
-import asyncio
 
 from websocket_server import mark_random_train_as_inactive
 from utils.navigate import fetch_ambu_broken_train_positions
+import redis
+import asyncio
 
 # Streamlit app setup
 st.set_page_config(
@@ -19,8 +18,19 @@ st.set_page_config(
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s: %(message)s")
 
-# Donut chart generator
+# Function to create a pie (donut) chart
 def make_pie_chart(usage_percentage, station_name, color_scheme):
+    """
+    Generates a donut chart displaying ambulance availability status.
+
+    Parameters:
+    - usage_percentage (int): Percentage of ambulances in use.
+    - station_name (str): Name of the station.
+    - color_scheme (str): Color scheme for the chart.
+
+    Returns:
+    - alt.Chart object: Donut chart representation.
+    """
     colors = {
         'blue': ['#29b5e8', '#155F7A'],
         'green': ['#27AE60', '#12783D'],
@@ -35,18 +45,29 @@ def make_pie_chart(usage_percentage, station_name, color_scheme):
 
     return alt.Chart(source).mark_arc().encode(
         theta="Value:Q",
-        color=alt.Color("Status:N", scale=alt.Scale(range=colors[color_scheme]),
-                        legend=alt.Legend(title="Ambulance Status")),
+        color=alt.Color("Status:N", scale=alt.Scale(range=colors[color_scheme]), legend=alt.Legend(title="Ambulance Status")),
         tooltip=["Status:N", "Value:Q"]
     ).properties(width=130, height=130, title=station_name)
 
-# Load animated map HTML
+# Function to load animated map HTML
 def load_map_html(filepath="animated_map.html"):
+    """
+    Loads an animated map from an HTML file.
+
+    Parameters:
+    - filepath (str): Path to the HTML file.
+
+    Returns:
+    - str: HTML content of the map.
+    """
     with open(filepath, "r") as f:
         return f.read()
 
-# Display ambulance data table
+# Function to create and display the ambulance data table
 def display_ambulance_data():
+    """
+    Displays the ambulance availability table in Streamlit.
+    """
     st.subheader("Ambulance station availability")
 
     # Sample data representing station capacities and availability
@@ -58,6 +79,7 @@ def display_ambulance_data():
 
     ambulance_data["In Use"] = ambulance_data["Capacity"] - ambulance_data["Ambulances"]
 
+    # Display the table with customized columns
     st.dataframe(
         ambulance_data,
         column_order=("Station", "Ambulances"),
@@ -70,8 +92,14 @@ def display_ambulance_data():
 
     return ambulance_data
 
-# Display ambulance availability charts
+# Function to display ambulance availability charts
 def display_availability_charts(ambulance_data):
+    """
+    Generates and displays donut charts for ambulance availability.
+
+    Parameters:
+    - ambulance_data (DataFrame): Data containing ambulance usage stats.
+    """
     st.subheader("Ambulance availability")
 
     color_options = ['red', 'green', 'blue', 'yellow']
@@ -80,18 +108,21 @@ def display_availability_charts(ambulance_data):
         usage_percentage = int((row["In Use"] / row["Capacity"]) * 100)
         st.altair_chart(make_pie_chart(usage_percentage, row["Station"], color_options[i]), use_container_width=True)
 
-# Redis client
+
+has_marked_train = False
 client = redis.Redis(host="tile38", port=9851, decode_responses=True)
 
-# Synchronous function to mark a random train as inactive
-def stop_random_train():
-    try:
-        result = mark_random_train_as_inactive(client)
-        logging.info("✅ Marked one random train as inactive!")
-        return result
-    except Exception as e:
-        logging.error(f"[ERROR] mark_random_train_as_inactive() failed: {e}")
-        return False
+async def mark_train_once():
+    """ Ensures mark_random_train_as_inactive() is only executed once """
+    global has_marked_train
+    if not has_marked_train:
+        try:
+            await mark_random_train_as_inactive(client)  # Must be inside an async function
+            has_marked_train = True  # Set flag to prevent re-execution
+            logging.info("✅ Marked one random train as inactive!")
+        except Exception as e:
+            logging.error(f"[ERROR] mark_random_train_as_inactive() failed: {e}")
+
 
 async def fetch_and_display_positions():
     """
@@ -104,43 +135,29 @@ async def fetch_and_display_positions():
     st.json(positions)  # Display the fetched data in JSON format
 
 # Main dashboard layout setup
-async def main():
+async def main():    
+    """
+    Initializes and renders the dashboard with sidebar, tables, and charts.
+    """
+    # Sidebar with dashboard title
     with st.sidebar:
         st.title("RCOP Dashboard")
 
+    # Define layout columns
     col = st.columns((2.5, 5, 1), gap="small")
 
-    # Left column: ambulance data and charts
+    # Display ambulance data table in the left column
     with col[0]:
         ambulance_data = display_ambulance_data()
         display_availability_charts(ambulance_data)
 
-    # Middle column: animated map
+    # Display animated map in the middle column
     with col[1]:
+        await mark_train_once() 
         st.components.v1.html(load_map_html(), height=500, scrolling=False)
+
         await fetch_and_display_positions()
 
-    # Right column: Incident/Train control
-    with col[2]:
-        st.markdown("### Train Control")
-        # Button to stop a random train (main requested feature)
-        if st.button("🛑 Stop a Random Train"):
-            st.session_state['train_stop_result'] = None
-            result = stop_random_train()
-            if result:
-                st.session_state['train_stop_result'] = "success"
-            else:
-                st.session_state['train_stop_result'] = "fail"
-            st.rerun()
-
-        train_stop_result = st.session_state.get('train_stop_result', None)
-        if train_stop_result == "success":
-            st.success("A random train was marked as inactive.")
-        elif train_stop_result == "fail":
-            st.error("Failed to mark a random train as inactive.")
-
-        st.markdown("---")
-        st.info("Use the button above to simulate stopping a train (incident).")
 
 # Run the dashboard
 if __name__ == "__main__":
