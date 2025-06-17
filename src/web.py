@@ -159,8 +159,8 @@ async def main():
     # Middle column: animated map
     with col[1]:
         route_points, timestamp, route_estimated_time = await fetch_and_display_positions()
-        display_availability_charts(ambulance_data)
         st.components.v1.html(load_map_html(route_points = route_points), height=500, scrolling=False)
+        display_availability_charts(ambulance_data)
 
     # Right column: Incident/Train control
     with col[2]:
