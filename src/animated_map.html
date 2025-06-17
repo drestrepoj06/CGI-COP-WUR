@@ -124,37 +124,6 @@
       });
   }
 
-  function updateAmbulancePositions(ambulances) {
-    ambulances.forEach(amb => {
-        try {
-            const id = amb[0]; // Extract Ambulance ID
-            const geojson = JSON.parse(amb[1]); // Parse GeoJSON string
-            const coordinates = geojson.coordinates; // Extract coordinates (lng, lat)
-            const timestamp = Number(amb[1].slice(-15,-2)); // Extract timestamp
-
-            // Convert [lng, lat] → [lat, lng] for Leaflet
-            const latlng = [coordinates[1], coordinates[0]];
-
-            const popupContent = `🚑 Ambulance ${id}<br/>⏰ ${formatTimestamp(timestamp)}`;
-
-            if (!ambulanceMarkers[id]) {
-                ambulanceMarkers[id] = L.circleMarker(latlng, {
-                    radius: 6,
-                    color: "red",
-                    fillColor: "red",
-                    fillOpacity: 0.4
-                }).addTo(map).bindPopup(popupContent);
-            } else {
-                ambulanceMarkers[id].setLatLng(latlng);
-                if (ambulanceMarkers[id].isPopupOpen()) {
-                    ambulanceMarkers[id].getPopup().setContent(popupContent);
-                }
-            }
-        } catch (error) {
-            console.error("🚨 Error parsing ambulance data:", amb, error);
-        }
-    });
-  }
 
   // // WebSocket connection to fetch live positions
   // function initWebSocket() {
@@ -176,7 +145,7 @@
 
     trainSocket.onmessage = event => {
         const data = JSON.parse(event.data);
-        console.log("🚆 Train Data Received:", data);
+        // console.log("🚆 Train Data Received:", data);
         
         if (data.collection === "train") {
             updateTrainPositions(data.data); // Update train markers
@@ -186,28 +155,178 @@
     trainSocket.onerror = error => console.error("🚨 Train WebSocket Error:", error);
   }
 
-  function initAmbulanceWebSocket() {
-      const ambulanceSocket = new WebSocket("ws://localhost:8000/ws/scan");
 
-      ambulanceSocket.onopen = () => {
-          ambulanceSocket.send(JSON.stringify({ collection: "ambulance" })); // Request ambulance data
-      };
 
-      ambulanceSocket.onmessage = event => {
-          const data = JSON.parse(event.data);
-          console.log("🚑 Ambulance Data Received:", data);
-          
-          if (data.collection === "ambulance") {
-              updateAmbulancePositions(data.data); // Update ambulance markers
-          }
-      };
+  function updateAmbulancePositions(ambulances, ambuPath) {
+    let ambuPathData = {}; // 存储路径数据
 
-      ambulanceSocket.onerror = error => console.error("🚨 Ambulance WebSocket Error:", error);
+    // 处理 ambuPath 数据
+    ambuPath.forEach(amP => {
+        try {
+            const [amP_id, amP_timestamp] = amP[0].split("_");
+            const amP_geojson = JSON.parse(amP[1]);
+            const [amP_lng, amP_lat] = amP_geojson.coordinates; // 提取坐标 (lng, lat)
+
+            // 以 amP_id 为第一级，amP_timestamp 为第二级
+            if (!ambuPathData[amP_id]) {
+                ambuPathData[amP_id] = {};
+            }
+            ambuPathData[amP_id][amP_timestamp] = { lng: amP_lng, lat: amP_lat };
+        } catch (error) {
+            console.error("🚨 Error parsing Ambu Path:", amP, error);
+        }
+    });
+
+    // **更新救护车位置**
+    ambulances.forEach(amb => {
+        try {
+            const id = amb[0]; // 获取救护车 ID
+            const geojson = JSON.parse(amb[1]); // 解析 GeoJSON 字符串
+            const coordinates = geojson.coordinates; // 获取坐标 (lng, lat)
+            const timestamp = Number(amb[1].slice(-15, -2)); // 解析时间戳
+
+            let latlng = [coordinates[1], coordinates[0]];
+
+            // **如果存在对应的路径数据，则替换坐标**
+            if (ambuPathData[id]) {
+                const timestamps = Object.keys(ambuPathData[id]).map(Number).sort((a, b) => a - b);
+                let closestTimestamp = timestamps[0];
+
+                for (const t of timestamps) {
+                    if (t <= timestamp) {
+                        closestTimestamp = t;
+                    } else {
+                        break;
+                    }
+                }
+
+                if (timestamp > timestamps[timestamps.length - 1]) {
+                    closestTimestamp = timestamps[timestamps.length - 1];
+                }
+
+                const pathCoords = ambuPathData[id][closestTimestamp];
+                latlng = [pathCoords.lat, pathCoords.lng];
+                console.log(`IF 🚑 LatLng: (${latlng[0]}, ${latlng[1]}), closestTimestamp: ${closestTimestamp}, ID: ${id}`);
+
+            }
+            console.log(`🚑 LatLng: (${latlng[0]}, ${latlng[1]}), Timestamp: ${timestamp}, ID: ${id}`);
+
+            const popupContent = `🚑 Ambulance ${id}<br/>⏰ ${formatTimestamp(timestamp)}`;
+
+            // **强制更新救护车位置**
+            if (!ambulanceMarkers[id]) {
+                ambulanceMarkers[id] = L.circleMarker(latlng, {
+                    radius: 6,
+                    color: "red",
+                    fillColor: "red",
+                    fillOpacity: 0.4
+                }).addTo(map).bindPopup(popupContent);
+            } else {
+                ambulanceMarkers[id].setLatLng(latlng); // **更新位置**
+                if (ambulanceMarkers[id].isPopupOpen()) {
+                    ambulanceMarkers[id].getPopup().setContent(popupContent);
+                }
+            }
+        } catch (error) {
+            console.error("🚨 Error parsing ambulance data:", amb, error);
+        }
+    });
+
+    // **强制刷新地图**
+    map.invalidateSize();
+
+
+
+
+    // ambulances.forEach(amb => {
+    //     try {
+    //         const id = amb[0]; // Extract Ambulance ID
+    //         const geojson = JSON.parse(amb[1]); // Parse GeoJSON string
+    //         const coordinates = geojson.coordinates; // Extract coordinates (lng, lat)
+    //         const timestamp = Number(amb[1].slice(-15,-2)); // Extract timestamp
+
+    //         // Convert [lng, lat] → [lat, lng] for Leaflet
+    //         const latlng = [coordinates[1], coordinates[0]];
+
+    //         const popupContent = `🚑 Ambulance ${id}<br/>⏰ ${formatTimestamp(timestamp)}`;
+
+    //         if (!ambulanceMarkers[id]) {
+    //             ambulanceMarkers[id] = L.circleMarker(latlng, {
+    //                 radius: 6,
+    //                 color: "red",
+    //                 fillColor: "red",
+    //                 fillOpacity: 0.4
+    //             }).addTo(map).bindPopup(popupContent);
+    //         } else {
+    //             ambulanceMarkers[id].setLatLng(latlng);
+    //             if (ambulanceMarkers[id].isPopupOpen()) {
+    //                 ambulanceMarkers[id].getPopup().setContent(popupContent);
+    //             }
+    //         }
+    //     } catch (error) {
+    //         console.error("🚨 Error parsing ambulance data:", amb, error);
+    //     }
+    // });
   }
+
+
+
+
+function initAmbulanceWebSocket() {
+    const ambulanceSocket = new WebSocket("ws://localhost:8000/ws/scan");
+    const ambuPathSocket = new WebSocket("ws://localhost:8000/ws/scan");
+
+    
+    let ambulanceData = [];
+    let ambuPathData = []; // 默认值为空数组，避免 undefined
+
+    ambulanceSocket.onopen = () => {
+        ambulanceSocket.send(JSON.stringify({ collection: "ambulance" })); // 请求救护车数据
+    };
+
+    ambuPathSocket.onopen = () => {
+        ambuPathSocket.send(JSON.stringify({ collection: "ambu_path" })); // 请求路径数据
+    };
+
+    ambulanceSocket.onmessage = event => {
+        const data = JSON.parse(event.data);
+        console.log("🚑 Ambulance Data Received:", data);
+        
+        if (data.collection === "ambulance") {
+            ambulanceData = data.data || []; // 确保数据不为空
+        }
+
+        // 调用 updateAmbulancePositions 时，确保 `ambuPathData` 为空时使用 `[]`
+        updateAmbulancePositions(ambulanceData, ambuPathData || []);
+    };
+
+    ambuPathSocket.onmessage = event => {
+        const data = JSON.parse(event.data);
+        // console.log("🛣️ Ambulance Path Data Received:", data);
+
+        // 如果收到的数据不包含 `ambu_path`，就忽略更新
+        if (data.collection === "ambu_path") {
+            ambuPathData = data.data || []; // 确保数据不为空
+            updateAmbulancePositions(ambulanceData, ambuPathData);
+        } else {
+            console.warn("⚠️ 'ambu_path' collection not found, skipping update.");
+        }
+    };
+
+    ambulanceSocket.onerror = error => console.error("🚨 Ambulance WebSocket Error:", error);
+    ambuPathSocket.onerror = error => console.error("🚨 Ambulance Path WebSocket Error:", error);
+  }
+
+
 
   // Initialize both WebSocket connections
   initTrainWebSocket();
   initAmbulanceWebSocket();
+  
+//     // **定期更新数据**
+//   setInterval(() => {
+//     initAmbulanceWebSocket(); // 每 5 秒重新请求数据
+//   }, 5000);
 
 
 
