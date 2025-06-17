@@ -79,7 +79,6 @@ def main():
         for message in consumer:
             topic = message.topic
             msg = message.value
-            # logging.info(f"📥 Received message from '{topic}': {msg}")
 
             collection = topic.split('-')[0]  # 'train' or 'ambulance'
 
@@ -108,10 +107,38 @@ def main():
                     fields["source"] = msg.get("source")
                     fields["status"] = True
                     fields["accident_location"] = None
-                    
-                # logging.info(json.dumps(fields))
-                tile38.execute_command("SET", collection, object_id, "FIELD", "info", json.dumps(fields), "POINT", lat, lng, timestamp_ms)
-                # logging.info(f"📡 Sent {collection} object {object_id} with fields {fields} and Z={timestamp_ms} to Tile38.")
+
+                # Initialize existing_fields and update logic
+                existing_fields = {}
+                skip_update = False
+
+                try:
+                    existing = tile38.execute_command("GET", collection, object_id, "WITHFIELDS", "OBJECT")
+                    if existing and isinstance(existing, list) and len(existing) >= 2:
+                        existing_obj = json.loads(existing[0])
+                        existing_fields = json.loads(existing[1][1])  # ['info', '{...}']
+
+                        # Check if the object is frozen
+                        if existing_fields.get("status") is False:
+                            skip_update = True
+                            logging.info(f"🚫 Skipping update for frozen {collection} {object_id}")
+                        elif "frozen_coords" in existing_fields:
+                            fields["frozen_coords"] = existing_fields["frozen_coords"]
+
+                except Exception as e:
+                    logging.warning(f"⚠️ Could not fetch existing data for {collection}/{object_id}: {e}")
+
+                # Decide how to store the object in Tile38
+                if not skip_update:
+                    if fields.get("status") is False:
+                        fields["frozen_coords"] = [lng, lat, timestamp_ms]
+                        geometry = json.dumps({
+                            "type": "Point",
+                            "coordinates": fields["frozen_coords"]
+                        })
+                        tile38.execute_command("SET", collection, object_id, "FIELD", "info", json.dumps(fields), "OBJECT", geometry)
+                    else:
+                        tile38.execute_command("SET", collection, object_id, "FIELD", "info", json.dumps(fields), "POINT", lat, lng, timestamp_ms)
 
             except Exception as e:
                 logging.error(f"❌ Failed to send point to Tile38: {e}")
@@ -123,6 +150,7 @@ def main():
     finally:
         consumer.close()
         logging.info("🔚 Kafka consumer closed.")
+
 
 
 if __name__ == "__main__":
