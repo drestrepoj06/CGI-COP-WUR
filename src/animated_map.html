@@ -52,35 +52,48 @@
   }
 
   function updateTrainPositions(trains) {
-    trains.forEach(train => {
-        try {
-            const id = train[0]; // Extract Train ID
-            const geojson = JSON.parse(train[1]); // Parse GeoJSON string
-            const coordinates = geojson.coordinates; // Extract coordinates (lng, lat)
-            const timestamp = train[2][1]; // Extract timestamp
+      trains.forEach(train => {
+          try {
+              const id = train[0]; // Extract Train ID
+              const geojson = JSON.parse(train[1]); // Parse GeoJSON string
+              const coordinates = geojson.coordinates; // Extract coordinates (lng, lat)
+              const timestamp = train[2][1]; // Extract info JSON string
 
-            // Convert [lng, lat] → [lat, lng] for Leaflet
-            const latlng = [coordinates[1], coordinates[0]];
+              // Parse the info JSON to get the status
+              let info = {};
+              try {
+                  info = JSON.parse(train[2][1]);
+              } catch (e) {
+                  info = {};
+              }
+              const isStopped = info.status === false;
 
-            const popupContent = `🚆 Train ${id}<br/>⏰ ${formatTimestamp(timestamp)}`;
+              // Set color based on status
+              const color = isStopped ? "purple" : "blue";
 
-            if (!trainMarkers[id]) {
-                trainMarkers[id] = L.circleMarker(latlng, {
-                    radius: 6,
-                    color: "blue",
-                    fillColor: "blue",
-                    fillOpacity: 0.8
-                }).addTo(map).bindPopup(popupContent);
-            } else {
-                trainMarkers[id].setLatLng(latlng);
-                if (trainMarkers[id].isPopupOpen()) {
-                    trainMarkers[id].getPopup().setContent(popupContent);
-                }
-            }
-        } catch (error) {
-            console.error("🚨 Error parsing train data:", train, error);
-        }
-    });
+              // Convert [lng, lat] → [lat, lng] for Leaflet
+              const latlng = [coordinates[1], coordinates[0]];
+
+              const popupContent = `🚆 Train ${id}<br/>⏰ ${formatTimestamp(timestamp)}<br/>Status: ${isStopped ? "Stopped" : "Active"}`;
+
+              if (!trainMarkers[id]) {
+                  trainMarkers[id] = L.circleMarker(latlng, {
+                      radius: 6,
+                      color: color,
+                      fillColor: color,
+                      fillOpacity: 0.8
+                  }).addTo(map).bindPopup(popupContent);
+              } else {
+                  trainMarkers[id].setLatLng(latlng);
+                  trainMarkers[id].setStyle({ color: color, fillColor: color });
+                  if (trainMarkers[id].isPopupOpen()) {
+                      trainMarkers[id].getPopup().setContent(popupContent);
+                  }
+              }
+          } catch (error) {
+              console.error("🚨 Error parsing train data:", train, error);
+          }
+      });
   }
 
   function updateAmbulancePositions(ambulances) {
