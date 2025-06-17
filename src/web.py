@@ -125,22 +125,47 @@ async def main():
         st.markdown("### Train Control")
         # Button to stop a random train (main requested feature)
         if st.button("🛑 Stop a Random Train"):
-            st.session_state['train_stop_result'] = None
-            result = stop_random_train()
-            if result:
+            st.session_state['incident_data'] = None
+            incident = stop_random_train()
+            if incident:
+                st.session_state['incident_data'] = incident
                 st.session_state['train_stop_result'] = "success"
             else:
                 st.session_state['train_stop_result'] = "fail"
             st.rerun()
-
         train_stop_result = st.session_state.get('train_stop_result', None)
-        if train_stop_result == "success":
-            st.success("A random train was marked as inactive.")
+        incident_data = st.session_state.get('incident_data', None)
+
+        if train_stop_result == "success" and incident_data:
+            st.success("An incident was simulated!")
+
+            coords = incident_data["location"].get("coordinates", [])
+            lng, lat = coords[0], coords[1]
+            timestamp = int(coords[2]) if len(coords) > 2 else None  # if 3D point with timestamp
+
+            # Create cleaned-up incident dict
+            clean_incident = {
+                "train_id": incident_data["train_id"],
+                "severity": incident_data["severity"],
+                "lat": lat,
+                "lng": lng,
+                "timestamp": timestamp
+            }
+
+            # Display as JSON or table
+            ts = clean_incident["timestamp"]
+            readable_time = datetime.utcfromtimestamp(ts / 1000).strftime('%Y-%m-%d %H:%M:%S')
+
+            st.markdown(f"""
+            ### 🚨 Incident Summary  
+            **Train ID**: `{clean_incident['train_id']}`  
+            **Severity**: `{clean_incident['severity']}`  
+            **Location**: `{clean_incident['lat']}, {clean_incident['lng']}`  
+            **Timestamp**: `{readable_time} UTC`
+            """)
+            
         elif train_stop_result == "fail":
             st.error("Failed to mark a random train as inactive.")
-
-        st.markdown("---")
-        st.info("Use the button above to simulate stopping a train (incident).")
 
 # Run the dashboard
 if __name__ == "__main__":
