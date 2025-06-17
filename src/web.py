@@ -5,6 +5,7 @@ import logging
 import redis
 from datetime import datetime
 import asyncio
+import json
 
 from websocket_server import mark_random_train_as_inactive
 from utils.navigate import fetch_ambu_broken_train_positions
@@ -42,8 +43,16 @@ def make_pie_chart(usage_percentage, station_name, color_scheme):
 
 # Load animated map HTML
 def load_map_html(filepath="animated_map.html"):
+    # Load rails GeoJSON
+    with open("utils/UtrechtRails.geojson", "r") as f:
+        rails_geojson = json.load(f)
+    rails_js = json.dumps(rails_geojson)
+
     with open(filepath, "r") as f:
-        return f.read()
+        html = f.read()
+        html = html.replace("//__INSERT_RAILS_HERE__", f"const railsData = {rails_js};")
+
+    return html
 
 # Display ambulance data table
 def display_ambulance_data():

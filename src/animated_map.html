@@ -20,6 +20,8 @@
 <div id="map"></div>
 
 <script>
+  //__INSERT_RAILS_HERE__   
+
   const trainMarkers = {};
   const ambulanceMarkers = {};
 
@@ -34,11 +36,21 @@
       attribution: '© <a href="https://www.mapbox.com/about/maps/">Mapbox</a> © <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>'
     }).addTo(map);
 
-    L.circle([52.094040, 5.093102], {
-      radius: 6150,
+    L.circle([52.094442, 5.092170], {
+      radius: 6125,
       color: 'black',
       fillColor: '#f03',
-      fillOpacity: 0
+      fillOpacity: 0,
+      dashArray: '10, 10'
+    }).addTo(map);
+
+    // Render rails
+    L.geoJSON(railsData, {
+        style: {
+        color: 'black',
+        weight: 2,
+        opacity: 0.8
+        }
     }).addTo(map);
 
     return map;
