@@ -2,8 +2,8 @@
 - [x] 1a. Add random train selector, change this train's FIELD 'status' from TRUE to FALSE, write the current location to TOPIC 'broken_train'
 - [ ] 2a. **Calculate estimated driving time from current ambu to this 'accident_location' based on Tomtom API, change this ambu's FIELD 'status' from TRUE to FALSE. Write the travel path of this ambu to Tile38 DB according to timestamp.**
 - [x] 2b. Create a Popup window to notify the accident.
-- [ ] 2c. Add the reset button.
-- [ ] 2d. Actually stop the train by modifying its subsequent coordinates.
+- [x] 2c. Add the reset button.
+- [x] 2d. Actually stop the train by modifying its subsequent coordinates.
 - [ ] 2e. Send **GEOFENCING** on the segments that 'status' are FALSE. Send alert when other trains come across them.
 - [ ] 2f. Change 1km nearby railsegments FIELD 'status' from TRUE to FALSE lay them over real-time traffic density
 - [x] 2h. Add railway to map.
