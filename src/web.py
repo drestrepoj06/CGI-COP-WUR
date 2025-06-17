@@ -202,7 +202,7 @@ async def main():
             # Create cleaned-up incident dict
             clean_incident = {
                 "train_id": st.session_state['incident_data']["train_id"],
-                "severity": st.session_state['incident_data']["severity"],
+                "severity": (st.session_state['incident_data']["severity"]).capitalize(),
                 "lat": lat,
                 "lng": lng,
                 "timestamp": timestamp
