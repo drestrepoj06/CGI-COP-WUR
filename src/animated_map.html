@@ -21,6 +21,7 @@
 
 <script>
   //__INSERT_RAILS_HERE__   
+  //__INSERT_ROUTE_POINTS_HERE__
 
   const trainMarkers = {};
   const ambulanceMarkers = {};
@@ -52,6 +53,13 @@
         opacity: 0.8
         }
     }).addTo(map);
+
+    L.polyline(routePoints, { 
+        color: '#D8BFD8',  // 浅紫色 (淡紫罗兰)
+        weight: 7,         // 线条宽度
+        opacity: 0.9       // 设置透明度 (0.0 完全透明 - 1.0 完全不透明)
+    }).addTo(map);
+
 
     return map;
   }

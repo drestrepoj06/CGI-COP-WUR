@@ -8,7 +8,7 @@ import asyncio
 import json
 
 from websocket_server import mark_random_train_as_inactive
-from utils.navigate import fetch_ambu_broken_train_positions
+from utils.navigate import fetch_ambu_broken_train_positions, calculate_optimal_path
 
 # Streamlit app setup
 st.set_page_config(
@@ -42,15 +42,20 @@ def make_pie_chart(usage_percentage, station_name, color_scheme):
     ).properties(width=130, height=130, title=station_name)
 
 # Load animated map HTML
-def load_map_html(filepath="animated_map.html"):
+def load_map_html(filepath="animated_map.html", route_points = None):
     # Load rails GeoJSON
     with open("utils/UtrechtRails.geojson", "r") as f:
         rails_geojson = json.load(f)
     rails_js = json.dumps(rails_geojson)
 
+    # 将 `route_points` 也转换为 JSON 格式
+    route_points_js = json.dumps(route_points)
+
+    # 读取 HTML 文件并插入数据
     with open(filepath, "r") as f:
         html = f.read()
         html = html.replace("//__INSERT_RAILS_HERE__", f"const railsData = {rails_js};")
+        html = html.replace("//__INSERT_ROUTE_POINTS_HERE__", f"const routePoints = {route_points_js};")
 
     return html
 
@@ -104,13 +109,26 @@ def stop_random_train():
 
 async def fetch_and_display_positions():
     """
-
     Fetch ambulance and broken train positions and display them in the dashboard.
     """
     positions = await fetch_ambu_broken_train_positions()
-    # routes = calculate_optimal_path(positions) 
+    routes = await calculate_optimal_path(positions)
 
-    st.json(positions)  # Display the fetched data in JSON format
+    # 确保 routes 不是 None 或者空字典
+    if not routes or not isinstance(routes, dict):
+        return [], None, None
+
+    # 提取所需数据，并检查 key 是否存在
+    route_points = [(point["latitude"], point["longitude"]) for point in routes.get("route_points", [])]
+    timestamp = routes.get("timestamp", None)
+    route_estimated_time = routes.get("route_estimated_time", None)
+
+    # # 显示 JSON 数据
+    # st.json(routes)
+
+    # 返回多个值（如果为空，则返回适当的空值）
+    return route_points, timestamp, route_estimated_time
+
 
 # Main dashboard layout setup
 async def main():
@@ -126,8 +144,8 @@ async def main():
 
     # Middle column: animated map
     with col[1]:
-        st.components.v1.html(load_map_html(), height=500, scrolling=False)
-        await fetch_and_display_positions()
+        route_points, timestamp, route_estimated_time = await fetch_and_display_positions()
+        st.components.v1.html(load_map_html(route_points = route_points), height=500, scrolling=False)
 
     # Right column: Incident/Train control
     with col[2]:

@@ -103,7 +103,7 @@ async def fetch_ambu_broken_train_positions(websocket=None):
 
 TOMTOM_API_KEY = "qVEH8Wgf8a02QXAKbeGFxawLEALIefZJ"
 
-async def get_route_points(origin, destination):
+def get_route(origin, destination):
     """获取救护车到指定目的地的路线点"""
     url = (
         f"https://api.tomtom.com/routing/1/calculateRoute/"
@@ -113,12 +113,15 @@ async def get_route_points(origin, destination):
     try:
         r = requests.get(url)
         r.raise_for_status()
-        return r.json()["routes"][0]["legs"][0]["points"]
+        return r.json()
     except Exception as e:
         print(f"Error fetching route: {e}")
         return []
     
 async def calculate_optimal_path(positions):
+    if not positions["broken_trains"]:
+        return {}
+
     # 找出时间戳最大的故障列车
     broken_trains = positions["broken_trains"]
 
@@ -128,17 +131,17 @@ async def calculate_optimal_path(positions):
     # 计算每辆救护车到该故障列车的路径
     ambulance_routes = [
         {
+            "timestamp": latest_train["timestamp"],
             "ambulance_id": ambu["id"],
-            "route_points": get_route_points((ambu["lat"], ambu["lng"]), (latest_train["lat"], latest_train["lng"]))
+            "route_points": get_route((ambu["lat"], ambu["lng"]), (latest_train["lat"], latest_train["lng"]))["routes"][0]["legs"][0]["points"],
+            "route_estimated_time": get_route((ambu["lat"], ambu["lng"]), (latest_train["lat"], latest_train["lng"]))["routes"][0]["legs"][0]["summary"]["travelTimeInSeconds"],
         }
         for ambu in positions["ambulance"]
     ]
-    final_output = {
-        "positions": positions,
-        "ambulance_routes": ambulance_routes,
-    }
     
-    return final_output
+    optimal_route = min(ambulance_routes, key=lambda r: r["route_estimated_time"])
+
+    return optimal_route
 
 
 
