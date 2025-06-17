@@ -126,8 +126,8 @@ async def fetch_and_display_positions():
     timestamp = routes.get("timestamp", None)
     route_estimated_time = routes.get("route_estimated_time", None)
 
-    # # 显示 JSON 数据
-    # st.json(routes)
+    # 显示 JSON 数据
+    st.json(routes)
 
     # 返回多个值（如果为空，则返回适当的空值）
     return route_points, timestamp, route_estimated_time
