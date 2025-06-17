@@ -68,7 +68,15 @@
 
   // Utility function for formatting timestamps
   function formatTimestamp(unixMs) {
-    return unixMs ? new Date(unixMs).toLocaleTimeString() : '';
+    return unixMs
+        ? new Date(unixMs).toLocaleString('en-GB', {
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            day: '2-digit',
+            month: 'short'  // e.g. "Jun"
+        })
+        : '';
   }
 
   function updateTrainPositions(trains) {
@@ -77,7 +85,7 @@
               const id = train[0]; // Extract Train ID
               const geojson = JSON.parse(train[1]); // Parse GeoJSON string
               const coordinates = geojson.coordinates; // Extract coordinates (lng, lat)
-              const timestamp = train[2][1]; // Extract info JSON string
+              const timestamp = Number(train[1].slice(-15,-2)); // Extract timestamp
 
               // Parse the info JSON to get the status
               let info = {};
@@ -122,7 +130,7 @@
             const id = amb[0]; // Extract Ambulance ID
             const geojson = JSON.parse(amb[1]); // Parse GeoJSON string
             const coordinates = geojson.coordinates; // Extract coordinates (lng, lat)
-            const timestamp = amb[2][1]; // Extract timestamp
+            const timestamp = Number(amb[1].slice(-15,-2)); // Extract timestamp
 
             // Convert [lng, lat] → [lat, lng] for Leaflet
             const latlng = [coordinates[1], coordinates[0]];
