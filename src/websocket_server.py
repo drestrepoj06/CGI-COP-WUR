@@ -117,6 +117,54 @@ def create_incident(client, train_id, location, description="Incident reported",
         logger.error(f"Failed to create incident {incident_id}: {e}", exc_info=True)
         return None
 
+def reset_all_trains(client):
+    """Reset all trains to active status and clear incidents"""
+    try:
+        # Reset all trains
+        response = client.execute_command("SCAN", "train")
+        cursor = response[0]
+        items = response[1] if len(response) > 1 else []
+        
+        for item in items:
+            try:
+                train_id = item[0]
+                response = client.execute_command("GET", "train", train_id, "WITHFIELDS", "OBJECT")
+                
+                if response is None:
+                    continue
+                    
+                geometry_obj = json.loads(response[0])
+                fields = {}
+                
+                if len(response) > 1:
+                    field_key = response[1][0]
+                    field_value_str = response[1][1]
+                    fields = json.loads(field_value_str)
+                
+                # Reset status and clear accident location
+                fields["status"] = True
+                if "accident_location" in fields:
+                    del fields["accident_location"]
+                
+                # Update in Tile38
+                client.execute_command(
+                    "SET", "train", train_id,
+                    "FIELD", "info", json.dumps(fields),
+                    "OBJECT", json.dumps(geometry_obj)
+                )
+                
+            except Exception as e:
+                logging.error(f"Error resetting train {train_id}: {e}")
+        
+        # Clear all incidents
+        client.execute_command("DROP", "broken_train")
+        logging.info("✅ All trains reset to active status and incidents cleared!")
+        return "success"
+        
+    except Exception as e:
+        logging.error(f"Reset failed: {e}")
+        return "fail"
+
 def mark_random_train_as_inactive(client):
     try:
         response = client.execute_command("SCAN", "train")
