@@ -4,8 +4,8 @@
 - [x] 2b. Create a Popup window to notify the accident.
 - [x] 2c. Add the reset button.
 - [x] 2d. Actually stop the train by modifying its subsequent coordinates.
-- [ ] 2e. Send **GEOFENCING** on the segments that 'status' are FALSE. Send alert when other trains come across them.
-- [ ] 2f. Change 1km nearby railsegments FIELD 'status' from TRUE to FALSE lay them over real-time traffic density
+- [ ] 2e. Change 1km nearby railsegments FIELD 'status' from TRUE to FALSE lay them over real-time traffic density
+- [ ] 2f. Send **GEOFENCING** on the segments that 'status' are FALSE. Send alert when other trains come across them.
 - [x] 2h. Add railway to map.
 
 Above should be finished before Wed meeting.
