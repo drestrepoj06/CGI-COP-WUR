@@ -28,12 +28,18 @@ def fetch_entity_positions(collection: str):
             try:
                 obj_id, geojson_str, info_str = entry[0], entry[1], entry[2][1]
 
-                geojson_obj, info_obj = json.loads(geojson_str), json.loads(info_str)
+                geojson_obj = json.loads(geojson_str)
+                info_obj = json.loads(info_str)
+
                 coords = geojson_obj.get("coordinates", [])
+
+                # Override coordinates if status is False and frozen_coords is available
+                if info_obj.get("status") is False and "frozen_coords" in info_obj:
+                    coords = info_obj["frozen_coords"]
 
                 if len(coords) < 2:
                     continue
-                
+
                 timestamp = coords[2] if len(coords) > 2 else None  # Optional timestamp
 
                 positions.append({
@@ -51,6 +57,7 @@ def fetch_entity_positions(collection: str):
         print(f"[ERROR] SCAN failed for {collection}: {e}")
 
     return positions
+
 
 async def get_all_positions():
     """
@@ -194,22 +201,28 @@ def mark_random_train_as_inactive(client):
 
     try:
         response = client.execute_command("GET", "train", selected_id, "WITHFIELDS", "OBJECT")
+        
         if response is None:
             raise ValueError(f"GET command returned None for train ID {selected_id}")
         
         if isinstance(response, list) and len(response) >= 2:
             geometry_obj = json.loads(response[0])
             
-            fields = {}
+            info_data = {}
             if len(response[1]) >= 2:
                 field_key = response[1][0]  # 'info'
                 field_value_str = response[1][1]  # JSON string
-                fields[field_key] = json.loads(field_value_str)
+                info_data = json.loads(field_value_str)
             
+            info_data["status"] = False
+            info_data["frozen_coords"] = geometry_obj["coordinates"]
+
             train_obj = {
                 "ok": True,
                 "object": geometry_obj,
-                "fields": fields
+                "fields": {
+                    "info": info_data
+                }
             }
         else:
             raise ValueError(f"Unexpected response format: {response}")
@@ -222,6 +235,7 @@ def mark_random_train_as_inactive(client):
     
     if "info" in fields and isinstance(fields["info"], dict):
         fields["info"]["status"] = False
+        fields["info"]["frozen_coords"] = train_obj["object"]["coordinates"]
     else:
         logger.warning(f"Train {selected_id} does not have expected info structure")
         return False
@@ -235,8 +249,10 @@ def mark_random_train_as_inactive(client):
         set_args = ["SET", "train", selected_id] + fields_args + ["OBJECT", geometry_json]
         logger.info(f"SET command args: {set_args}")
         client.execute_command(*set_args)
+        
         logger.info(f"Updated train {selected_id} status to False.")
-
+        check_response = client.execute_command("GET", "train", selected_id, "WITHFIELDS", "OBJECT")
+        logger.info(f"🔎 Post-update check for {selected_id}: {check_response}")
         incident = create_incident(client, selected_id, train_obj["object"], description="Train marked inactive due to incident")
         return incident  # Return incident dictionary
 
