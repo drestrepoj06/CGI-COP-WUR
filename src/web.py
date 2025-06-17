@@ -9,6 +9,7 @@ import json
 
 from websocket_server import mark_random_train_as_inactive, reset_all_trains
 from utils.navigate import fetch_ambu_broken_train_positions, calculate_optimal_path
+from utils.join_query import record_ambulance_path
 
 # Streamlit app setup
 st.set_page_config(
@@ -122,9 +123,12 @@ async def fetch_and_display_positions():
         return [], None, None
 
     # 提取所需数据，并检查 key 是否存在
+    ambulance_id = routes.get("ambulance_id", None)
     route_points = [(point["latitude"], point["longitude"]) for point in routes.get("route_points", [])]
     timestamp = routes.get("timestamp", None)
     route_estimated_time = routes.get("route_estimated_time", None)
+
+    await record_ambulance_path(route_points, timestamp, route_estimated_time, ambulance_id)
 
     # 显示 JSON 数据
     st.json(routes)
