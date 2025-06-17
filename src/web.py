@@ -7,7 +7,7 @@ from datetime import datetime
 import asyncio
 import json
 
-from websocket_server import mark_random_train_as_inactive
+from websocket_server import mark_random_train_as_inactive, reset_all_trains
 from utils.navigate import fetch_ambu_broken_train_positions, calculate_optimal_path
 
 # Streamlit app setup
@@ -90,9 +90,12 @@ def display_availability_charts(ambulance_data):
 
     color_options = ['red', 'green', 'blue', 'yellow']
 
+    cols = st.columns(4)
+
     for i, row in ambulance_data.iterrows():
         usage_percentage = int((row["In Use"] / row["Capacity"]) * 100)
-        st.altair_chart(make_pie_chart(usage_percentage, row["Station"], color_options[i]), use_container_width=True)
+        with cols[i]:
+            st.altair_chart(make_pie_chart(usage_percentage, row["Station"], color_options[i]))
 
 # Redis client
 client = redis.Redis(host="tile38", port=9851, decode_responses=True)
@@ -140,17 +143,18 @@ async def main():
     # Left column: ambulance data and charts
     with col[0]:
         ambulance_data = display_ambulance_data()
-        display_availability_charts(ambulance_data)
-
+        
     # Middle column: animated map
     with col[1]:
         route_points, timestamp, route_estimated_time = await fetch_and_display_positions()
+        display_availability_charts(ambulance_data)
         st.components.v1.html(load_map_html(route_points = route_points), height=500, scrolling=False)
 
     # Right column: Incident/Train control
     with col[2]:
         st.markdown("### Train Control")
-        # Button to stop a random train (main requested feature)
+        
+        # Button to stop a random train
         if st.button("🛑 Stop a Random Train"):
             st.session_state['incident_data'] = None
             incident = stop_random_train()
@@ -160,15 +164,22 @@ async def main():
             else:
                 st.session_state['train_stop_result'] = "fail"
             st.rerun()
+        
+        # Button to reset all trains
+        if st.button("🔄 Reset All Trains"):
+            st.session_state['reset_result'] = reset_all_trains(client)
+            st.rerun()
+
         train_stop_result = st.session_state.get('train_stop_result', None)
         incident_data = st.session_state.get('incident_data', None)
+        reset_result = st.session_state.get('reset_result', None)
 
         if train_stop_result == "success" and incident_data:
             st.success("An incident was simulated!")
 
             coords = incident_data["location"].get("coordinates", [])
             lng, lat = coords[0], coords[1]
-            timestamp = int(coords[2]) if len(coords) > 2 else None  # if 3D point with timestamp
+            timestamp = int(coords[2]) if len(coords) > 2 else None
 
             # Create cleaned-up incident dict
             clean_incident = {
@@ -190,9 +201,17 @@ async def main():
             **Location**: `{clean_incident['lat']}, {clean_incident['lng']}`  
             **Timestamp**: `{readable_time} UTC`
             """)
-            
+           
         elif train_stop_result == "fail":
             st.error("Failed to mark a random train as inactive.")
+        
+        if reset_result == "success":
+            st.success("All trains have been reset to active status!")
+        elif reset_result == "fail":
+            st.error("Failed to reset trains.")
+
+        st.markdown("---")
+        st.info("Use the buttons above to simulate incidents or reset trains.")
 
 # Run the dashboard
 if __name__ == "__main__":
