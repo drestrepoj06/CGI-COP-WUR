@@ -113,19 +113,25 @@
               const isStopped = info.status === false;
 
               // Set color based on status
-              const color = isStopped ? "purple" : "blue";
+            //   const color = isStopped ? "purple" : "blue";
 
               // Convert [lng, lat] → [lat, lng] for Leaflet
               const latlng = [coordinates[1], coordinates[0]];
 
               const popupContent = `🚆 Train ${id}<br/>⏰ ${formatTimestamp(timestamp)}<br/>Status: ${isStopped ? "Stopped" : "Active"}`;
             
-              const trainIcon = L.icon({
+              const trainIcon = isStopped ? (L.icon({
+                iconUrl: 'https://raw.githubusercontent.com/drestrepoj06/CGI-COP-WUR/CRUD/src/vec/icngb25_stopped.png',
+                iconSize: [40, 40], // 图标大小
+                iconAnchor: [16, 16], // 图标中心点
+                popupAnchor: [0, -16] // 弹出框偏移量
+            }))
+            : (L.icon({
                 iconUrl: 'https://raw.githubusercontent.com/drestrepoj06/CGI-COP-WUR/CRUD/src/vec/icngb25.png',
                 iconSize: [32, 32], // 图标大小
                 iconAnchor: [16, 16], // 图标中心点
                 popupAnchor: [0, -16] // 弹出框偏移量
-            });
+            }));
 
             if (!trainMarkers[id]) {
                 trainMarkers[id] = L.marker(latlng, { icon: trainIcon })
