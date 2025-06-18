@@ -130,8 +130,8 @@ async def fetch_and_display_positions():
 
     await record_ambulance_path(route_points, timestamp, route_estimated_time, ambulance_id)
 
-    # 显示 JSON 数据
-    st.json(routes)
+    # # 显示 JSON 数据
+    # st.json(routes)
 
     # 返回多个值（如果为空，则返回适当的空值）
     return route_points, timestamp, route_estimated_time

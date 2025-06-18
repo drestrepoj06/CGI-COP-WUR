@@ -103,21 +103,38 @@
               const latlng = [coordinates[1], coordinates[0]];
 
               const popupContent = `🚆 Train ${id}<br/>⏰ ${formatTimestamp(timestamp)}<br/>Status: ${isStopped ? "Stopped" : "Active"}`;
+            
+              const trainIcon = L.icon({
+                iconUrl: 'https://raw.githubusercontent.com/drestrepoj06/CGI-COP-WUR/CRUD/src/vec/icngb25.png',
+                iconSize: [32, 32], // 图标大小
+                iconAnchor: [16, 16], // 图标中心点
+                popupAnchor: [0, -16] // 弹出框偏移量
+            });
 
-              if (!trainMarkers[id]) {
-                  trainMarkers[id] = L.circleMarker(latlng, {
-                      radius: 6,
-                      color: color,
-                      fillColor: color,
-                      fillOpacity: 0.8
-                  }).addTo(map).bindPopup(popupContent);
-              } else {
-                  trainMarkers[id].setLatLng(latlng);
-                  trainMarkers[id].setStyle({ color: color, fillColor: color });
-                  if (trainMarkers[id].isPopupOpen()) {
-                      trainMarkers[id].getPopup().setContent(popupContent);
-                  }
-              }
+            if (!trainMarkers[id]) {
+                trainMarkers[id] = L.marker(latlng, { icon: trainIcon })
+                    .addTo(map)
+                    .bindPopup(popupContent);
+            } else {
+                trainMarkers[id].setLatLng(latlng); // **更新位置**
+                if (trainMarkers[id].isPopupOpen()) {
+                    trainMarkers[id].getPopup().setContent(popupContent);
+                }
+            }
+            //   if (!trainMarkers[id]) {
+            //       trainMarkers[id] = L.circleMarker(latlng, {
+            //           radius: 6,
+            //           color: color,
+            //           fillColor: color,
+            //           fillOpacity: 0.8
+            //       }).addTo(map).bindPopup(popupContent);
+            //   } else {
+            //       trainMarkers[id].setLatLng(latlng);
+            //       trainMarkers[id].setStyle({ color: color, fillColor: color });
+            //       if (trainMarkers[id].isPopupOpen()) {
+            //           trainMarkers[id].getPopup().setContent(popupContent);
+            //       }
+            //   }
           } catch (error) {
               console.error("🚨 Error parsing train data:", train, error);
           }
@@ -213,14 +230,25 @@
 
             const popupContent = `🚑 Ambulance ${id}<br/>⏰ ${formatTimestamp(timestamp)}`;
 
+
+            const ambulanceIcon = L.icon({
+                iconUrl: 'https://raw.githubusercontent.com/drestrepoj06/CGI-COP-WUR/CRUD/src/vec/ambulance-100.png',  // 替换为实际救护车图标的路径
+                iconSize: [32, 32], // 图标大小
+                iconAnchor: [16, 16], // 图标中心点
+                popupAnchor: [0, -16] // 弹出框偏移量
+            });
+
             // **强制更新救护车位置**
             if (!ambulanceMarkers[id]) {
-                ambulanceMarkers[id] = L.circleMarker(latlng, {
-                    radius: 6,
-                    color: "red",
-                    fillColor: "red",
-                    fillOpacity: 0.4
-                }).addTo(map).bindPopup(popupContent);
+                ambulanceMarkers[id] = L.marker(latlng, { icon: ambulanceIcon })
+                    .addTo(map)
+                    .bindPopup(popupContent);
+                // ambulanceMarkers[id] = L.circleMarker(latlng, {
+                //     radius: 6,
+                //     color: "red",
+                //     fillColor: "red",
+                //     fillOpacity: 0.4
+                // }).addTo(map).bindPopup(popupContent);
             } else {
                 ambulanceMarkers[id].setLatLng(latlng); // **更新位置**
                 if (ambulanceMarkers[id].isPopupOpen()) {
@@ -235,38 +263,6 @@
     // **强制刷新地图**
     map.invalidateSize();
 
-
-
-
-    // ambulances.forEach(amb => {
-    //     try {
-    //         const id = amb[0]; // Extract Ambulance ID
-    //         const geojson = JSON.parse(amb[1]); // Parse GeoJSON string
-    //         const coordinates = geojson.coordinates; // Extract coordinates (lng, lat)
-    //         const timestamp = Number(amb[1].slice(-15,-2)); // Extract timestamp
-
-    //         // Convert [lng, lat] → [lat, lng] for Leaflet
-    //         const latlng = [coordinates[1], coordinates[0]];
-
-    //         const popupContent = `🚑 Ambulance ${id}<br/>⏰ ${formatTimestamp(timestamp)}`;
-
-    //         if (!ambulanceMarkers[id]) {
-    //             ambulanceMarkers[id] = L.circleMarker(latlng, {
-    //                 radius: 6,
-    //                 color: "red",
-    //                 fillColor: "red",
-    //                 fillOpacity: 0.4
-    //             }).addTo(map).bindPopup(popupContent);
-    //         } else {
-    //             ambulanceMarkers[id].setLatLng(latlng);
-    //             if (ambulanceMarkers[id].isPopupOpen()) {
-    //                 ambulanceMarkers[id].getPopup().setContent(popupContent);
-    //             }
-    //         }
-    //     } catch (error) {
-    //         console.error("🚨 Error parsing ambulance data:", amb, error);
-    //     }
-    // });
   }
 
 
