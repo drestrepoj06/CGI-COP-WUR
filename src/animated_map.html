@@ -21,6 +21,7 @@
 
 <script>
   //__INSERT_RAILS_HERE__   
+  //__INSERT_AMBULANCE_STATIONS_HERE__
   //__INSERT_ROUTE_POINTS_HERE__
 
   const trainMarkers = {};
@@ -43,6 +44,21 @@
       fillColor: '#f03',
       fillOpacity: 0,
       dashArray: '10, 10'
+    }).addTo(map);
+
+    // Render ambulance stations
+    L.geoJSON(ambulanceStationsData, {
+        pointToLayer: function (feature, latlng) {
+            return L.rectangle([
+                [latlng.lat - 0.001, latlng.lng - 0.003],
+                [latlng.lat + 0.001, latlng.lng + 0.003]
+            ], {
+                color: 'yellow',
+                weight: 1,
+                fillColor: 'yellow',
+                fillOpacity: 1
+            });
+        }
     }).addTo(map);
 
     // Render rails
