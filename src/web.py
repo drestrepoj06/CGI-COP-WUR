@@ -48,6 +48,11 @@ def load_map_html(filepath="animated_map.html", route_points = None):
     with open("utils/UtrechtRails.geojson", "r") as f:
         rails_geojson = json.load(f)
     rails_js = json.dumps(rails_geojson)
+    
+    # Load Ambulance Stations
+    with open("utils/AmbulanceStations.geojson", "r") as f:
+        ambulance_stations_geojson = json.load(f)
+    ambulance_stations_js = json.dumps(ambulance_stations_geojson)
 
     # 将 `route_points` 也转换为 JSON 格式
     route_points_js = json.dumps(route_points)
@@ -56,6 +61,7 @@ def load_map_html(filepath="animated_map.html", route_points = None):
     with open(filepath, "r") as f:
         html = f.read()
         html = html.replace("//__INSERT_RAILS_HERE__", f"const railsData = {rails_js};")
+        html = html.replace("//__INSERT_AMBULANCE_STATIONS_HERE__", f"const ambulanceStationsData = {ambulance_stations_js};")
         html = html.replace("//__INSERT_ROUTE_POINTS_HERE__", f"const routePoints = {route_points_js};")
 
     return html
