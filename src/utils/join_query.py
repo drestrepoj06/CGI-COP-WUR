@@ -13,7 +13,7 @@ async def record_ambulance_path(route_points, timestamp, route_estimated_time, a
 
     # 遍历所有路径点，并计算时间偏移量
     for index, (lat, lng) in enumerate(route_points):
-        adjusted_timestamp = timestamp + (index * route_estimated_time // len(route_points) * 1000)
+        adjusted_timestamp = timestamp + (index * route_estimated_time // len(route_points) * 50)
 
         # 执行 Tile38 SET 命令
         command = f"SET ambu_path {ambulance_id}_{adjusted_timestamp} POINT {lat} {lng} {adjusted_timestamp}"
