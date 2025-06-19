@@ -17,8 +17,8 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(mess
 KAFKA_BROKER = 'kafka:9092'
 TOPICS = ['train-locations', 'ambulance-locations']
 
-TRAIN_LOGS_PATH = 'backend/utils/train_logs.json'
-AMB_LOGS_PATH = 'backend/utils/ambulance_logs.json'
+TRAIN_LOGS_PATH = 'utils/train_logs.json'
+AMB_LOGS_PATH = 'utils/ambulance_logs.json'
 TOPICS = ['train-locations', 'ambulance-locations']
 
 
@@ -146,13 +146,13 @@ def produce_train_messages():
                     "speed": train['snelheid'],
                     "direction": train['richting']
                 }
-                logging.info(f"📤 Sending train data: {message}")
+                # logging.info(f"📤 Sending train data: {message}")
                 producer.send('train-locations', value=message)
 
-                # Create geofence if train has stopped
-                if train['snelheid'] == 0:
-                    tile38.execute_command(f"SET trains {train['ritId']} POINT {train['lat']} {train['lng']}")
-                    logging.info(f"🚧 Geofence set for stopped train {train['ritId']} at ({train['lat']}, {train['lng']})")
+                # # Create geofence if train has stopped
+                # if train['snelheid'] == 0:
+                #     tile38.execute_command(f"SET trains {train['ritId']} POINT {train['lat']} {train['lng']}")
+                #     logging.info(f"🚧 Geofence set for stopped train {train['ritId']} at ({train['lat']}, {train['lng']})")
 
             producer.flush()
             time.sleep(5)
@@ -196,11 +196,11 @@ def produce_ambulance_messages():
         # Send messages in batches every 5 seconds
         for timestamp, messages in timestamp_groups.items():
             for message in messages:
-                logging.info(f"📤 Sending ambulance data: {message}")
+                # logging.info(f"📤 Sending ambulance data: {message}")
                 producer.send('ambulance-locations', value=message)
             producer.flush()
-            logging.info(f"✅ Ambulance data batch for timestamp {timestamp} sent.")
-            time.sleep(1)  # Optional delay between batches
+            # logging.info(f"✅ Ambulance data batch for timestamp {timestamp} sent.")
+            time.sleep(2)  # Optional delay between batches
 
     except Exception as e:
         logging.error(f"🚨 Ambulance producer error: {e}")

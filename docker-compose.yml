@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   kafka:
     image: bitnami/kafka:3.6
@@ -42,8 +40,7 @@ services:
       TILE38_HOST: "tile38"
       TILE38_PORT: "9851"
     ports:
-      - "8501:8501"
+      - "8501:8501"  # Streamlit UI
+      - "8000:8000"  # WebSocket API (e.g., FastAPI)
     volumes:
       - ./src:/src
-      - ./train_location_data:/app/train_location_data
-      - ./ambulance_location_data:/app/ambulance_location_data

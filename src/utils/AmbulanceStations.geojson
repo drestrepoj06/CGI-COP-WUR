@@ -1,0 +1,50 @@
+{
+    "type": "FeatureCollection",
+    "features": [
+        {
+            "type": "Feature",
+            "id": 14,
+            "geometry": {
+                "type": "Point",
+                "coordinates": [
+                    5.0350034518291782,
+                    52.121336764630847
+                ]
+            },
+            "properties": {
+                "OBJECTID": 14,
+                "StationName": "Maarssen"
+            }
+        },
+        {
+            "type": "Feature",
+            "id": 15,
+            "geometry": {
+                "type": "Point",
+                "coordinates": [
+                    5.1144412810627191,
+                    52.108944909751685
+                ]
+            },
+            "properties": {
+                "OBJECTID": 15,
+                "StationName": "Vader Rijndreef"
+            }
+        },
+        {
+            "type": "Feature",
+            "id": 16,
+            "geometry": {
+                "type": "Point",
+                "coordinates": [
+                    5.1377039683203343,
+                    52.080930550191525
+                ]
+            },
+            "properties": {
+                "OBJECTID": 16,
+                "StationName": "Diakonessenhuis"
+            }
+        }
+    ]
+}

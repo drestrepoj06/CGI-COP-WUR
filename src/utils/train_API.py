@@ -6,7 +6,7 @@ from geopy.distance import geodesic
 
 API_KEY = "43846b8fddcf4e2bb41def8291de6bf4"
 CENTER = (52.094040, 5.093102)  
-MAX_DIST_km = 10
+MAX_DIST_km = 6.150
 
 headers = {
     "Ocp-Apim-Subscription-Key": API_KEY
