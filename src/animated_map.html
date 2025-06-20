@@ -83,29 +83,6 @@
   const map = initMap();
 
 
-  function showIncidentPopup(lat, lng, trainId, severity, description) {
-    const popupContent = `
-        <b>🚨 Train Incident</b><br>
-        <b>Train ID:</b> ${trainId}<br>
-        <b>Severity:</b> ${severity}<br>
-        <b>Description:</b> ${description}
-    `;
-
-    const icon = L.icon({
-        iconUrl: 'https://raw.githubusercontent.com/drestrepoj06/CGI-COP-WUR/CRUD/src/vec/icngb25_stopped.png',
-        iconSize: [40, 40],
-        iconAnchor: [20, 40],
-        popupAnchor: [0, -30]
-    });
-
-    const marker = L.marker([lat, lng], { icon: icon })
-        .addTo(map)
-        .bindPopup(popupContent)
-        .openPopup();
-
-    map.setView([lat, lng], 15);  // Zoom to the incident
-    }
-
     
 
   // Utility function for formatting timestamps
@@ -121,69 +98,69 @@
         : '';
   }
 
-  function updateTrainPositions(trains) {
-      trains.forEach(train => {
-          try {
-              const id = train[0]; // Extract Train ID
-              const geojson = JSON.parse(train[1]); // Parse GeoJSON string
-              const coordinates = geojson.coordinates; // Extract coordinates (lng, lat)
-              const timestamp = Number(train[1].slice(-15,-2)); // Extract timestamp
+ function updateTrainPositions(trains) {
+    trains.forEach(train => {
+        try {
+            const id = train[0]; // Extract Train ID
+            const geojson = JSON.parse(train[1]); // Parse GeoJSON string
+            const coordinates = geojson.coordinates; // Extract coordinates (lng, lat)
+            const timestamp = Number(train[1].slice(-15, -2)); // Extract timestamp
 
-              // Parse the info JSON to get the status
-              let info = {};
-              try {
-                  info = JSON.parse(train[2][1]);
-              } catch (e) {
-                  info = {};
-              }
-              const isStopped = info.status === false;
+            // Parse the info JSON to get the status
+            let info = {};
+            try {
+                info = JSON.parse(train[2][1]);
+            } catch (e) {
+                info = {};
+            }
 
-                // Skip if train is outside the visible area
-                if (info.is_within_area === false) {
-                    if (trainMarkers[id]) {
-                        map.removeLayer(trainMarkers[id]);  // Remove marker if it exists
-                        delete trainMarkers[id];
-                    }
-                    return;  // Skip further processing
+            const isStopped = info.status === false;
+
+            // Remove marker and skip if outside area
+            if (info.is_within_area === false) {
+                if (trainMarkers[id]) {
+                    map.removeLayer(trainMarkers[id]);
+                    delete trainMarkers[id];
                 }
+                return;
+            }
 
-                
-              // Set color based on status
-            //   const color = isStopped ? "purple" : "blue";
+            // Remove and skip if train is stopped
+            if (isStopped) {
+                if (trainMarkers[id]) {
+                    map.removeLayer(trainMarkers[id]);
+                    delete trainMarkers[id];
+                }
+                return;
+            }
 
-              // Convert [lng, lat] → [lat, lng] for Leaflet
-              const latlng = [coordinates[1], coordinates[0]];
+            // Active train: continue
+            const latlng = [coordinates[1], coordinates[0]];
 
-              const popupContent = `🚆 Train ${id}<br/>⏰ ${formatTimestamp(timestamp)}<br/>Status: ${isStopped ? "Stopped" : "Active"}`;
-            
-              const trainIcon = isStopped ? (L.icon({
-                iconUrl: 'https://raw.githubusercontent.com/drestrepoj06/CGI-COP-WUR/CRUD/src/vec/icngb25_stopped.png',
-                iconSize: [40, 40], // 图标大小
-                iconAnchor: [16, 16], // 图标中心点
-                popupAnchor: [0, -16] // 弹出框偏移量
-            }))
-            : (L.icon({
+            const popupContent = `🚆 Train ${id}<br/>⏰ ${formatTimestamp(timestamp)}<br/>Status: Active`;
+
+            const trainIcon = L.icon({
                 iconUrl: 'https://raw.githubusercontent.com/drestrepoj06/CGI-COP-WUR/CRUD/src/vec/icngb25.png',
-                iconSize: [32, 32], // 图标大小
-                iconAnchor: [16, 16], // 图标中心点
-                popupAnchor: [0, -16] // 弹出框偏移量
-            }));
+                iconSize: [32, 32],
+                iconAnchor: [16, 16],
+                popupAnchor: [0, -16]
+            });
 
             if (!trainMarkers[id]) {
                 trainMarkers[id] = L.marker(latlng, { icon: trainIcon })
                     .addTo(map)
                     .bindPopup(popupContent);
             } else {
-                trainMarkers[id].setLatLng(latlng); // **更新位置**
+                trainMarkers[id].setLatLng(latlng);
                 if (trainMarkers[id].isPopupOpen()) {
                     trainMarkers[id].getPopup().setContent(popupContent);
                 }
             }
-          } catch (error) {
-              console.error("🚨 Error parsing train data:", train, error);
-          }
-      });
-  }
+        } catch (error) {
+            console.error("🚨 Error parsing train data:", train, error);
+        }
+    });
+ }
 
 
   function initTrainWebSocket() {
