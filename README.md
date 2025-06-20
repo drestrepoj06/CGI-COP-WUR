@@ -1,22 +1,23 @@
-- [ ] Not urgent: Write doc to explain mock-up data file:  
-- [x] 1a. Add random train selector, change this train's FIELD 'status' from TRUE to FALSE, write the current location to TOPIC 'broken_train'
-- [ ] 2a. **Calculate estimated driving time from current ambu to this 'accident_location' based on Tomtom API, change this ambu's FIELD 'status' from TRUE to FALSE. Write the travel path of this ambu to Tile38 DB according to timestamp.**
-- [x] 2b. Create a Popup window to notify the accident.
-- [x] 2c. Add the reset button.
-- [x] 2d. Actually stop the train by modifying its subsequent coordinates.
-- [ ] 2e. Change 1km nearby railsegments FIELD 'status' from TRUE to FALSE lay them over real-time traffic density
-- [ ] 2f. Send **GEOFENCING** on the segments that 'status' are FALSE. Send alert when other trains come across them.
-- [x] 2h. Add railway to map.
-
-Above should be finished before Wed meeting.
-
+Currently working on:
+- [ ] 1a. Change 1km nearby railsegments FIELD 'status' from TRUE to FALSE lay them over real-time traffic density. (Mate or Jhon after 1e-f)
+- [ ] 1b. Send **GEOFENCING** on the segments that 'status' are FALSE. Send alert when other trains come across them.  (Mate or Jhon after 1e-f)
+- [ ] 1c. Calculate estimated driving time from current ambu to this 'accident_location' based on Tomtom API. **Move code into the consumer** (Xiaolu)
+- [ ] 1d. Fix bug with having to refresh the button (should be fixed by completing 1c). (Xiaolu)
+- [ ] 1e. Update severity field. (Jhon)
+- [ ] 1f. Create a pop-up at the stopped train upon pressing the button/update incident information window. (Jhon)
+- [ ] 1g. Fix bug with trains stopping at the border of the study area. (Thijs)
+- [ ] 1h. Add more simulated ambulances. (Falco)
 ---
 
-- [ ] 3a. Update pie chart.
-- [x] 4a. Assign color to different road based on traffic density.
-- [ ] 4b. Increase speed for ambu when it's on it's duty.
-- [ ] 4c. A progress bar to reveal the time ambu takes to arrive the 'accident_location'.
-- [ ] 5a. What happen when we want more ambu for the same 'accident_location'.
+Requirements:  
+- [ ] 2a. Set realistic speed when an ambulance is driving towards incident location.
+- [ ] 2b. Estimated Time of Arrival of ambulance to incident location
+
+---
+Other tasks:
+- [ ] 3. Write doc to explain mock-up data file:  
+- [ ] 4. Link charts and graphs to data on the map.
+- [ ] 5. Send multiple ambulances to incident location based on severity.
 
 ---
 
