@@ -5,7 +5,8 @@ Currently working on:
 - [ ] 1d. Fix bug with having to refresh the button (should be fixed by completing 1c). (Xiaolu)
 - [x] 1e. Update severity field. (Jhon)
 - [x] 1f. Create a pop-up at the stopped train upon pressing the button/update incident information window. (Jhon)
-- [ ] 1g. Fix bug with trains stopping at the border of the study area. (Thijs)
+- [x] 1g1. Fix bug with trains stopping at the border of the study area. (Thijs)
+- [ ] 1g2. Only allow trains within area to be stopped by the button. (Thijs)
 - [ ] 1h. Add more simulated ambulances. (Falco)
 ---
 
