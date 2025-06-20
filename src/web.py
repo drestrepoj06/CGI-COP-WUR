@@ -166,7 +166,36 @@ async def main():
     # Middle column: animated map
     with col[1]:
         route_points, timestamp, route_estimated_time = await fetch_and_display_positions()
-        st.components.v1.html(load_map_html(route_points = route_points), height=500, scrolling=False)
+        incident_js = ""
+        if st.session_state['button_states']['show_incident'] and st.session_state.get('incident_data'):
+            coords = st.session_state['incident_data']["location"].get("coordinates", [])
+            lng, lat = coords[0], coords[1]
+            timestamp = int(coords[2]) if len(coords) > 2 else None
+
+            # Create cleaned-up incident dict
+            clean_incident = {
+                "train_id": st.session_state['incident_data']["train_id"],
+                "severity": (st.session_state['incident_data']["severity"]).capitalize(),
+                "description": (st.session_state['incident_data']["description"]).capitalize(),
+                "lat": lat,
+                "lng": lng,
+                "timestamp": timestamp
+            }
+
+            # Display as JSON or table
+            ts = clean_incident["timestamp"]
+            incident_js = f"""
+            <script>
+                showIncidentPopup(
+                    {clean_incident['lat']},
+                    {clean_incident['lng']},
+                    "{clean_incident['train_id']}",
+                    "{clean_incident['severity']}",
+                    "{clean_incident['description']}"
+                );
+            </script>
+            """
+        st.components.v1.html(load_map_html(route_points=route_points) + incident_js, height=500, scrolling=False)
         display_availability_charts(ambulance_data)
 
     # Right column: Incident/Train control
@@ -205,21 +234,20 @@ async def main():
         st.caption("(This will reset all trains)")
 
         st.markdown("---")
-
-        # Display incident notification if active
         if st.session_state['button_states']['show_incident'] and st.session_state.get('incident_data'):
             st.success("An incident was simulated!")
             coords = st.session_state['incident_data']["location"].get("coordinates", [])
             lng, lat = coords[0], coords[1]
             timestamp = int(coords[2]) if len(coords) > 2 else None
 
-            # Create cleaned-up incident dict
             clean_incident = {
                 "train_id": st.session_state['incident_data']["train_id"],
-                "severity": (st.session_state['incident_data']["severity"]).capitalize(),
                 "lat": lat,
                 "lng": lng,
-                "timestamp": timestamp
+                "timestamp": timestamp,
+                "affected_passengers": (st.session_state['incident_data']["affected_passengers"]),
+                "ambulance_units": (st.session_state['incident_data']["ambulance_units"]),
+                "technical_resources": (st.session_state['incident_data']["technical_resources"]).capitalize()
             }
 
             # Display as JSON or table
@@ -228,10 +256,12 @@ async def main():
 
             st.markdown(f"""
             ### 🚨 Incident Summary  
-            **Train ID**: `{clean_incident['train_id']}`  
-            **Severity**: `{clean_incident['severity']}`  
-            **Location**: `{clean_incident['lat']}, {clean_incident['lng']}`  
-            **Timestamp**: `{readable_time} UTC`
+            - **Train ID**: {clean_incident['train_id']}  
+            - **Location**: {clean_incident['lat']}, {clean_incident['lng']}  
+            - **Timestamp**: {readable_time} UTC  
+            - **Passengers Affected**: {clean_incident['affected_passengers']}  
+            - **Ambulance Units Required**: {clean_incident['ambulance_units']}  
+            - **Technical Resources Required**: {clean_incident['technical_resources']}
             """)
 
         # Display reset success notification if active
