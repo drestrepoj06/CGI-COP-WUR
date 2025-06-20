@@ -7,7 +7,7 @@ import requests
 logger = logging.getLogger("uvicorn")
 client = redis.Redis(host="tile38", port=9851, decode_responses=True)
 
-async def fetch_ambulance_positions():
+def fetch_ambulance_positions():
     """
     Fetches ambulance location data and returns only ID and coordinates.
     
@@ -145,22 +145,3 @@ async def calculate_optimal_path(positions):
 
 
 
-# def fetch_and_display_positions():
-#     """
-
-#     Fetch ambulance and broken train positions and display them in the dashboard.
-#     """
-#     positions = fetch_ambu_broken_train_positions()
-#     routes = calculate_optimal_path(positions) 
-
-#     st.json(routes)  # Display the fetched data in JSON format
-
-# async def delayed_fetch():
-#     """等待 2 秒后执行 fetch_and_display_positions"""
-#     await asyncio.sleep(2)
-#     await fetch_and_display_positions()
-    
-
-
-#         # Fetch and display positions below the map
-#         asyncio.run(delayed_fetch())

@@ -43,7 +43,7 @@ def make_pie_chart(usage_percentage, station_name, color_scheme):
     ).properties(width=130, height=130, title=station_name)
 
 # Load animated map HTML
-def load_map_html(filepath="animated_map.html", route_points = None):
+def load_map_html(filepath="animated_map.html"):
     # Load rails GeoJSON
     with open("utils/UtrechtRails.geojson", "r") as f:
         rails_geojson = json.load(f)
@@ -54,15 +54,15 @@ def load_map_html(filepath="animated_map.html", route_points = None):
         ambulance_stations_geojson = json.load(f)
     ambulance_stations_js = json.dumps(ambulance_stations_geojson)
 
-    # 将 `route_points` 也转换为 JSON 格式
-    route_points_js = json.dumps(route_points)
+    # # 将 `route_points` 也转换为 JSON 格式
+    # route_points_js = json.dumps(route_points)
 
     # 读取 HTML 文件并插入数据
     with open(filepath, "r") as f:
         html = f.read()
         html = html.replace("//__INSERT_RAILS_HERE__", f"const railsData = {rails_js};")
         html = html.replace("//__INSERT_AMBULANCE_STATIONS_HERE__", f"const ambulanceStationsData = {ambulance_stations_js};")
-        html = html.replace("//__INSERT_ROUTE_POINTS_HERE__", f"const routePoints = {route_points_js};")
+        # html = html.replace("//__INSERT_ROUTE_POINTS_HERE__", f"const routePoints = {route_points_js};")
 
     return html
 
@@ -117,30 +117,30 @@ def stop_random_train():
         logging.error(f"[ERROR] mark_random_train_as_inactive() failed: {e}")
         return False
 
-async def fetch_and_display_positions():
-    """
-    Fetch ambulance and broken train positions and display them in the dashboard.
-    """
-    positions = await fetch_ambu_broken_train_positions()
-    routes = await calculate_optimal_path(positions)
+# async def fetch_and_display_positions():
+#     """
+#     Fetch ambulance and broken train positions and display them in the dashboard.
+#     """
+#     positions = await fetch_ambu_broken_train_positions()
+#     routes = await calculate_optimal_path(positions)
 
-    # 确保 routes 不是 None 或者空字典
-    if not routes or not isinstance(routes, dict):
-        return [], None, None
+#     # 确保 routes 不是 None 或者空字典
+#     if not routes or not isinstance(routes, dict):
+#         return [], None, None
 
-    # 提取所需数据，并检查 key 是否存在
-    ambulance_id = routes.get("ambulance_id", None)
-    route_points = [(point["latitude"], point["longitude"]) for point in routes.get("route_points", [])]
-    timestamp = routes.get("timestamp", None)
-    route_estimated_time = routes.get("route_estimated_time", None)
+#     # 提取所需数据，并检查 key 是否存在
+#     ambulance_id = routes.get("ambulance_id", None)
+#     route_points = [(point["latitude"], point["longitude"]) for point in routes.get("route_points", [])]
+#     timestamp = routes.get("timestamp", None)
+#     route_estimated_time = routes.get("route_estimated_time", None)
 
-    await record_ambulance_path(route_points, timestamp, route_estimated_time, ambulance_id)
+#     await record_ambulance_path(route_points, timestamp, route_estimated_time, ambulance_id)
 
-    # # 显示 JSON 数据
-    # st.json(routes)
+#     # # 显示 JSON 数据
+#     # st.json(routes)
 
-    # 返回多个值（如果为空，则返回适当的空值）
-    return route_points, timestamp, route_estimated_time
+#     # 返回多个值（如果为空，则返回适当的空值）
+#     return route_points, timestamp, route_estimated_time
 
 
 # Main dashboard layout setup
@@ -165,8 +165,8 @@ async def main():
         
     # Middle column: animated map
     with col[1]:
-        route_points, timestamp, route_estimated_time = await fetch_and_display_positions()
-        st.components.v1.html(load_map_html(route_points = route_points), height=500, scrolling=False)
+        # route_points, timestamp, route_estimated_time = await fetch_and_display_positions()
+        st.components.v1.html(load_map_html(), height=500, scrolling=False)
         display_availability_charts(ambulance_data)
 
     # Right column: Incident/Train control

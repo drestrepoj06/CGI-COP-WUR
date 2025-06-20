@@ -4,6 +4,8 @@ import sys
 import redis
 from kafka import KafkaConsumer
 
+from utils.navigate import fetch_ambulance_positions, get_route
+
 # Logging config
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
 
@@ -70,6 +72,24 @@ def create_kafka_consumer():
         sys.exit(1)
 
 
+def get_busy_object_ids_from_ambu_path():
+    object_ids = []
+    try:
+        cursor, response = tile38.execute_command("SCAN", "ambu_path2train")
+        if response and isinstance(response, list):
+            for obj in response:
+                full_id = obj[0]  # e.g., "103944_ambu_3"
+                parts = full_id.split("_")
+                if len(parts) >= 3:
+                    ambulance_id = parts[-1]  # 最后一部分是我们想要的数字部分
+                    object_ids.append(ambulance_id)
+    except Exception as e:
+        logging.error(f"Failed to scan ambu_path2train: {e}")
+    
+    return object_ids
+
+
+
 def main():
     store_rail_segments()
 
@@ -98,15 +118,27 @@ def main():
                     fields["accident_location"] = None
                     
                 else:  # ambulance-locations
+                    # 提前获取已有的救护车路径对象关联的 vehicle_number 列表
+                    ambu_related_ids = get_busy_object_ids_from_ambu_path()
+
                     object_id = msg.get("vehicle_number", f"ambulance_{int(timestamp_ms)}")
-                    fields["vehicle_number"] = msg.get("vehicle_number")
+                    vehicle_number = msg.get("vehicle_number")
+
+                    fields["vehicle_number"] = vehicle_number
                     fields["speed"] = msg.get("speed")
                     fields["heading"] = msg.get("heading")
                     fields["accuracy"] = msg.get("accuracy")
                     fields["type"] = msg.get("type")
                     fields["source"] = msg.get("source")
-                    fields["status"] = True
+
+                    # 如果这个救护车已经被分配到一条 ambu_path2train 中了，就标记为“冻结”状态
+                    if vehicle_number in ambu_related_ids:
+                        fields["status"] = False
+                    else:
+                        fields["status"] = True
+
                     fields["accident_location"] = None
+
 
                 # Initialize existing_fields and update logic
                 existing_fields = {}
@@ -139,6 +171,86 @@ def main():
                         tile38.execute_command("SET", collection, object_id, "FIELD", "info", json.dumps(fields), "OBJECT", geometry)
                     else:
                         tile38.execute_command("SET", collection, object_id, "FIELD", "info", json.dumps(fields), "POINT", lat, lng, timestamp_ms)
+
+
+
+
+                # 扫描 broken_train 中的所有对象，找出时间最新的一条
+                latest_broken = None
+                latest_timestamp = -1
+
+                try:
+                    cursor, response = tile38.execute_command("SCAN", "broken_train")
+                    if response and isinstance(response, list):
+                        for obj in response:
+                            try:
+                                object_id = obj[0].split("_")[1] 
+                                geojson_obj = json.loads(obj[1])
+                                coords = geojson_obj.get("coordinates", [])
+
+                                if len(coords) < 3:
+                                    continue
+
+                                timestamp = coords[2]
+                                if timestamp > latest_timestamp:
+                                    latest_timestamp = timestamp
+                                    latest_broken = {
+                                        "object_id": object_id,
+                                        "geojson": geojson_obj,
+                                        "lat": coords[1],
+                                        "lng": coords[0],
+                                        "timestamp": timestamp
+                                    }
+                            except Exception as e:
+                                logging.warning(f"Failed to parse broken_train obj {obj}: {e}")
+
+                    if latest_broken:
+                        logging.info(f"🚨 Latest incident: {latest_broken['object_id']} at {latest_broken['timestamp']}")
+
+                        ambulance_positions = fetch_ambulance_positions()
+
+                        logging.info(ambulance_positions)
+                        logging.info("ambulance_positions")
+
+                        ambu_routes = [
+                            {
+                                "ambulance_id": ambu["id"],
+                                "route": get_route((ambu["lat"], ambu["lng"]), (latest_broken["lat"], latest_broken["lng"]))
+                            }
+                            for ambu in ambulance_positions
+                        ]
+
+                        best_route = min(
+                            ambu_routes,
+                            key=lambda x: x["route"]["routes"][0]["legs"][0]["summary"]["travelTimeInSeconds"]
+                        )
+                        
+                        # logging.info(best_route)
+                        logging.info("best_route eta time: ")
+                        logging.info({best_route["route"]["routes"][0]["legs"][0]["summary"]["travelTimeInSeconds"]})
+
+                        ambu_path_fields = {
+                            "ambulance_id": best_route["ambulance_id"],
+                            "travel_time": best_route["route"]["routes"][0]["legs"][0]["summary"]["travelTimeInSeconds"],
+                            "route_points": best_route["route"]["routes"][0]["legs"][0]["points"]
+                        }
+
+                        ambu_path_ambu_id_train_id = f"{latest_broken['object_id']}_ambu_{best_route["ambulance_id"]}"
+
+                        
+                        tile38.execute_command(
+                            "SET", "ambu_path2train", ambu_path_ambu_id_train_id,
+                            "FIELD", "info", json.dumps(ambu_path_fields),
+                            "OBJECT", json.dumps(latest_broken["geojson"])
+                        )
+
+                except Exception as e:
+                    logging.error(f"🚨 Error while scanning and processing broken_train data: {e}")
+
+
+
+
+
 
             except Exception as e:
                 logging.error(f"❌ Failed to send point to Tile38: {e}")
