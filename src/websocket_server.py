@@ -88,15 +88,57 @@ async def send_positions(websocket: WebSocket):
         await websocket.close()
 
 
-
-
-def create_incident(client, train_id, location, description="Incident reported", severity="high", train_timestamp=None):
+def create_incident(client, train_id, location, description="Incident reported", train_timestamp=None):
+    logger = logging.getLogger(__name__)
+    
     incident_id = f"incident_{train_id}_{datetime.datetime.utcnow().strftime('%Y%m%d%H%M%S%f')}"
 
-    if train_timestamp:
-        incident_time = train_timestamp
-    else:
-        incident_time = datetime.datetime.utcnow().isoformat() + "Z"
+    SEVERITY_DESCRIPTION_MAP = {
+        "low": [
+            "Passenger with mild nausea",
+            "Passenger feeling light-headed",
+            "Complaint of headache",
+            "Minor allergic reaction"
+        ],
+        "moderate": [
+            "Injuries while boarding",
+            "Passengers fainted",
+            "Small fire and burnt passengers"
+        ],
+        "high": [
+            "Passengers showing signs of stroke",
+            "Panic, epileptic and diabetic attacks"
+        ],
+        "critical": [
+            "Multiple injuries from collision", 
+            "Small fire and burnt passengers"           
+        ]
+    }
+
+    # Choose severity and corresponding description
+    severity = random.choice(list(SEVERITY_DESCRIPTION_MAP.keys()))
+    description = random.choice(SEVERITY_DESCRIPTION_MAP[severity])
+
+    # Determine timestamp
+    incident_time = train_timestamp or datetime.datetime.utcnow().isoformat() + "Z"
+
+    # Additional contextual fields
+    affected_passengers_map = {
+        "low": 1,
+        "moderate": 3,
+        "high": 5,
+        "critical": 12
+    }
+    ambulance_units_map = {
+        "low": 1,
+        "moderate": 1,
+        "high": 2,
+        "critical": 3
+    }
+
+    affected_passengers = affected_passengers_map[severity]
+    ambulance_units = ambulance_units_map[severity]
+    technical_resources = "no"  # Always "no" in your case
 
     if not isinstance(location, dict) or "type" not in location or "coordinates" not in location:
         logger.error(f"Invalid location data passed to create_incident: {location}")
@@ -107,22 +149,32 @@ def create_incident(client, train_id, location, description="Incident reported",
         client.execute_command(
             "SET", "broken_train", incident_id,
             "FIELD", "severity", severity,
+            "FIELD", "description", description,
             "FIELD", "status", "inactive",
             "FIELD", "timestamp", str(incident_time),
+            "FIELD", "affected_passengers", affected_passengers,
+            "FIELD", "ambulance_units", ambulance_units,
+            "FIELD", "technical_resources", technical_resources,
             "OBJECT", geometry_json
         )
+
         logger.info(f"Created incident {incident_id} for train {train_id}.")
+
         return {
             "incident_id": incident_id,
             "train_id": train_id,
             "location": location,
             "severity": severity,
             "description": description,
-            "timestamp": incident_time
+            "timestamp": incident_time,
+            "affected_passengers": affected_passengers,
+            "ambulance_units": ambulance_units,
+            "technical_resources": technical_resources
         }
     except Exception as e:
         logger.error(f"Failed to create incident {incident_id}: {e}", exc_info=True)
         return None
+
 
 def reset_all_trains(client):
     """Reset all trains to active status and clear incidents"""
