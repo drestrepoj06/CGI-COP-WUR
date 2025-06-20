@@ -3,6 +3,7 @@ import logging
 import sys
 import redis
 from kafka import KafkaConsumer
+from geopy.distance import geodesic
 
 # Logging config
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
@@ -69,6 +70,15 @@ def create_kafka_consumer():
         logging.error(f"❌ KafkaConsumer creation failed: {e}")
         sys.exit(1)
 
+# Train visibility settings
+CENTER = (52.094040, 5.093102)  # Same as in train_API.py
+MAX_VISIBLE_DIST_KM = 6.15  # Trains beyond this are hidden
+
+def is_within_visible_radius(lat, lng):
+    """Returns True if train is within 6.15 km, False otherwise."""
+    if lat is None or lng is None:
+        return False
+    return geodesic(CENTER, (lat, lng)).km <= MAX_VISIBLE_DIST_KM
 
 def main():
     store_rail_segments()
@@ -95,6 +105,7 @@ def main():
                     fields["speed"] = msg.get("speed")
                     fields["direction"] = msg.get("direction")
                     fields["status"] = True
+                    fields["is_within_area"] = is_within_visible_radius(lat, lng)  # New visibility flag
                     fields["accident_location"] = None
                     
                 else:  # ambulance-locations

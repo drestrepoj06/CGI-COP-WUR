@@ -138,6 +138,16 @@
               }
               const isStopped = info.status === false;
 
+                // Skip if train is outside the visible area
+                if (info.is_within_area === false) {
+                    if (trainMarkers[id]) {
+                        map.removeLayer(trainMarkers[id]);  // Remove marker if it exists
+                        delete trainMarkers[id];
+                    }
+                    return;  // Skip further processing
+                }
+
+                
               // Set color based on status
             //   const color = isStopped ? "purple" : "blue";
 
