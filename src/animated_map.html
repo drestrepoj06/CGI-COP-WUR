@@ -82,6 +82,32 @@
 
   const map = initMap();
 
+
+  function showIncidentPopup(lat, lng, trainId, severity, description) {
+    const popupContent = `
+        <b>🚨 Train Incident</b><br>
+        <b>Train ID:</b> ${trainId}<br>
+        <b>Severity:</b> ${severity}<br>
+        <b>Description:</b> ${description}
+    `;
+
+    const icon = L.icon({
+        iconUrl: 'https://raw.githubusercontent.com/drestrepoj06/CGI-COP-WUR/CRUD/src/vec/icngb25_stopped.png',
+        iconSize: [40, 40],
+        iconAnchor: [20, 40],
+        popupAnchor: [0, -30]
+    });
+
+    const marker = L.marker([lat, lng], { icon: icon })
+        .addTo(map)
+        .bindPopup(popupContent)
+        .openPopup();
+
+    map.setView([lat, lng], 15);  // Zoom to the incident
+    }
+
+    
+
   // Utility function for formatting timestamps
   function formatTimestamp(unixMs) {
     return unixMs
@@ -143,37 +169,12 @@
                     trainMarkers[id].getPopup().setContent(popupContent);
                 }
             }
-            //   if (!trainMarkers[id]) {
-            //       trainMarkers[id] = L.circleMarker(latlng, {
-            //           radius: 6,
-            //           color: color,
-            //           fillColor: color,
-            //           fillOpacity: 0.8
-            //       }).addTo(map).bindPopup(popupContent);
-            //   } else {
-            //       trainMarkers[id].setLatLng(latlng);
-            //       trainMarkers[id].setStyle({ color: color, fillColor: color });
-            //       if (trainMarkers[id].isPopupOpen()) {
-            //           trainMarkers[id].getPopup().setContent(popupContent);
-            //       }
-            //   }
           } catch (error) {
               console.error("🚨 Error parsing train data:", train, error);
           }
       });
   }
 
-
-  // // WebSocket connection to fetch live positions
-  // function initWebSocket() {
-  //   const socket = new WebSocket("ws://localhost:8000/ws/positions");
-
-  //   socket.onmessage = event => {
-  //     const data = JSON.parse(event.data);
-  //     updateTrainPositions(data.train);
-  //     updateAmbulancePositions(data.ambulance);
-  //   };
-  // }
 
   function initTrainWebSocket() {
     const trainSocket = new WebSocket("ws://localhost:8000/ws/scan");
@@ -193,8 +194,47 @@
 
     trainSocket.onerror = error => console.error("🚨 Train WebSocket Error:", error);
   }
+ let incidentMarker = null;
 
+ function showIncidentPopup(lat, lng, trainId, severity, description) {
+    // Update existing marker if trainId is found
+    if (trainMarkers[trainId]) {
+        const popupContent = `
+            <b>🚨 Train Incident</b><br>
+            <b>Train ID:</b> ${trainId}<br>
+            <b>Severity:</b> ${severity}<br>
+            <b>Description:</b> ${description}
+        `;
+        trainMarkers[trainId].bindPopup(popupContent).openPopup();
+        map.setView([lat, lng], 15, { animate: true });
+    } else {
+        // Fallback: if marker not found, create a temporary incident marker
+        if (incidentMarker) {
+            map.removeLayer(incidentMarker);
+        }
 
+        const icon = L.icon({
+            iconUrl: 'https://raw.githubusercontent.com/drestrepoj06/CGI-COP-WUR/CRUD/src/vec/icngb25_stopped.png',
+            iconSize: [40, 40],
+            iconAnchor: [20, 40],
+            popupAnchor: [0, -30]
+        });
+
+        const popupContent = `
+            <b>🚨 Train Incident</b><br>
+            <b>Train ID:</b> ${trainId}<br>
+            <b>Severity:</b> ${severity}<br>
+            <b>Description:</b> ${description}
+        `;
+
+        incidentMarker = L.marker([lat, lng], { icon: icon })
+            .addTo(map)
+            .bindPopup(popupContent)
+            .openPopup();
+
+        map.setView([lat, lng], 15, { animate: true });
+    }
+ }
 
   function updateAmbulancePositions(ambulances, ambuPath) {
     let ambuPathData = {}; // 存储路径数据
