@@ -1,311 +1,360 @@
 <!DOCTYPE html>
 <html>
+
 <head>
-  <meta charset="utf-8" />
-  <title>Leaflet Live Vehicle Animation</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link href="https://fonts.googleapis.com/css2?family=Source+Sans+Pro&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
-  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-  <style>
-    html, body, #map {
-      height: 100%;
-      margin: 0;
-      padding: 0;
-      font-family: 'Source Sans Pro', sans-serif;
-    }
-  </style>
+    <meta charset="utf-8" />
+    <title>Leaflet Live Vehicle Animation</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link href="https://fonts.googleapis.com/css2?family=Source+Sans+Pro&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <style>
+        html,
+        body,
+        #map {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            font-family: 'Source Sans Pro', sans-serif;
+        }
+    </style>
 </head>
+
 <body>
-<div id="map"></div>
+    <div id="map"></div>
 
-<script>
-  //__INSERT_RAILS_HERE__   
-  //__INSERT_AMBULANCE_STATIONS_HERE__
-  
-  const trainMarkers = {};
-  const ambulanceMarkers = {};
+    <script>
+        //__INSERT_RAILS_HERE__   
+        //__INSERT_AMBULANCE_STATIONS_HERE__
 
-  // Initialize Map
-  function initMap() {
-    const map = L.map('map').setView([52.1, 5.1], 12);
+        const trainMarkers = {};
+        const ambulanceMarkers = {};
 
-    // Mapbox Light Gray Tile Layer
-    L.tileLayer('https://api.mapbox.com/styles/v1/mapbox/navigation-day-v1/tiles/{z}/{x}/{y}?access_token=pk.eyJ1IjoicnVvdGFsIiwiYSI6ImNtYmh5ZjA5eDAyN3kyanI0cGE2b295MW0ifQ.Cf2xGVOEXF-7hbunq3soyw', {
-      tileSize: 512,
-      zoomOffset: -1,
-      attribution: '© <a href="https://www.mapbox.com/about/maps/">Mapbox</a> © <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-    }).addTo(map);
+        // Initialize Map
+        function initMap() {
+            const map = L.map('map').setView([52.1, 5.1], 12);
 
-    L.circle([52.094442, 5.092170], {
-      radius: 6125,
-      color: 'black',
-      fillColor: '#f03',
-      fillOpacity: 0,
-      dashArray: '10, 10'
-    }).addTo(map);
+            // Mapbox Light Gray Tile Layer
+            L.tileLayer('https://api.mapbox.com/styles/v1/mapbox/navigation-day-v1/tiles/{z}/{x}/{y}?access_token=pk.eyJ1IjoicnVvdGFsIiwiYSI6ImNtYmh5ZjA5eDAyN3kyanI0cGE2b295MW0ifQ.Cf2xGVOEXF-7hbunq3soyw', {
+                tileSize: 512,
+                zoomOffset: -1,
+                attribution: '© <a href="https://www.mapbox.com/about/maps/">Mapbox</a> © <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+            }).addTo(map);
 
-    // Render ambulance stations
-    L.geoJSON(ambulanceStationsData, {
-        pointToLayer: function (feature, latlng) {
-            return L.rectangle([
-                [latlng.lat - 0.001, latlng.lng - 0.003],
-                [latlng.lat + 0.001, latlng.lng + 0.003]
-            ], {
-                color: 'yellow',
-                weight: 1,
-                fillColor: 'yellow',
-                fillOpacity: 1
-            });
-        }
-    }).addTo(map);
+            L.circle([52.094442, 5.092170], {
+                radius: 6125,
+                color: 'black',
+                fillColor: '#f03',
+                fillOpacity: 0,
+                dashArray: '10, 10'
+            }).addTo(map);
 
-    // Render rails
-    L.geoJSON(railsData, {
-        style: {
-        color: 'black',
-        weight: 2,
-        opacity: 0.8
-        }
-    }).addTo(map);
-
-    // L.polyline(routePoints, { 
-    //     color: '#FF00FF',  // 浅紫色 (淡紫罗兰)
-    //     weight: 7,         // 线条宽度
-    //     opacity: 0.9       // 设置透明度 (0.0 完全透明 - 1.0 完全不透明)
-    // }).addTo(map);
-
-
-    return map;
-  }
-
-  const map = initMap();
-
-  // Utility function for formatting timestamps
-  function formatTimestamp(unixMs) {
-    return unixMs
-        ? new Date(unixMs).toLocaleString('en-GB', {
-            hour: '2-digit',
-            minute: '2-digit',
-            second: '2-digit',
-            day: '2-digit',
-            month: 'short'  // e.g. "Jun"
-        })
-        : '';
-  }
-
-
-
-  function updateTrainPositions(trains) {
-    trains.forEach(train => {
-        try {
-            const id = train[0]; // Extract Train ID
-            const geojson = JSON.parse(train[1]); // Parse GeoJSON string
-            const coordinates = geojson.coordinates; // Extract coordinates (lng, lat)
-            const timestamp = train[2][1]; // Extract timestamp
-
-            // Convert [lng, lat] → [lat, lng] for Leaflet
-            const latlng = [coordinates[1], coordinates[0]];
-
-            const popupContent = `🚆 Train ${id}<br/>⏰ ${formatTimestamp(timestamp)}`;
-            
-            console.log(`🛰 Updating train ${id}`);
-            console.log(`📍 Location: ${latlng}`);
-            console.log(`🕒 Timestamp: ${timestamp}`);
-
-            if (!trainMarkers[id]) {
-                trainMarkers[id] = L.circleMarker(latlng, {
-                    radius: 6,
-                    color: "blue",
-                    fillColor: "blue",
-                    fillOpacity: 0.8
-                }).addTo(map).bindPopup(popupContent);
-            } else {
-                trainMarkers[id].setLatLng(latlng);
-                if (trainMarkers[id].isPopupOpen()) {
-                    trainMarkers[id].getPopup().setContent(popupContent);
+            // Render ambulance stations
+            L.geoJSON(ambulanceStationsData, {
+                pointToLayer: function (feature, latlng) {
+                    return L.rectangle([
+                        [latlng.lat - 0.001, latlng.lng - 0.003],
+                        [latlng.lat + 0.001, latlng.lng + 0.003]
+                    ], {
+                        color: 'yellow',
+                        weight: 1,
+                        fillColor: 'yellow',
+                        fillOpacity: 1
+                    });
                 }
-            }
-        } catch (error) {
-            console.error("🚨 Error parsing train data:", train, error);
-        }
-    });
-  }
+            }).addTo(map);
 
-  function updateAmbulancePositions(ambulances) {
-    ambulances.forEach(amb => {
-        try {
-            const id = amb[0]; // Extract Ambulance ID
-            const geojson = JSON.parse(amb[1]); // Parse GeoJSON string
-            const coordinates = geojson.coordinates; // Extract coordinates (lng, lat)
-            const timestamp = amb[2][1]; // Extract timestamp
-
-            // Convert [lng, lat] → [lat, lng] for Leaflet
-            const latlng = [coordinates[1], coordinates[0]];
-
-            const popupContent = `🚑 Ambulance ${id}<br/>⏰ ${formatTimestamp(timestamp)}`;
-
-            console.log(`🛰 Updating Ambulance ${id}`);
-            console.log(`📍 Location: ${latlng}`);
-            console.log(`🕒 Timestamp: ${timestamp}`);
-
-            if (!ambulanceMarkers[id]) {
-                ambulanceMarkers[id] = L.circleMarker(latlng, {
-                    radius: 6,
-                    color: "red",
-                    fillColor: "red",
-                    fillOpacity: 0.4
-                }).addTo(map).bindPopup(popupContent);
-            } else {
-                ambulanceMarkers[id].setLatLng(latlng);
-                if (ambulanceMarkers[id].isPopupOpen()) {
-                    ambulanceMarkers[id].getPopup().setContent(popupContent);
+            // Render rails
+            L.geoJSON(railsData, {
+                style: {
+                    color: 'black',
+                    weight: 2,
+                    opacity: 0.8
                 }
-            }
-        } catch (error) {
-            console.error("🚨 Error parsing ambulance data:", amb, error);
+            }).addTo(map);
+
+            return map;
         }
-    });
-  }
 
-  // // WebSocket connection to fetch live positions
-  // function initWebSocket() {
-  //   const socket = new WebSocket("ws://localhost:8000/ws/positions");
+        const map = initMap();
 
-  //   socket.onmessage = event => {
-  //     const data = JSON.parse(event.data);
-  //     updateTrainPositions(data.train);
-  //     updateAmbulancePositions(data.ambulance);
-  //   };
-  // }
-
-  function initTrainWebSocket() {
-    const trainSocket = new WebSocket("ws://localhost:8000/ws/scan");
-
-    trainSocket.onopen = () => {
-        trainSocket.send(JSON.stringify({ collection: "train" })); // Request train data
-    };
-
-    trainSocket.onmessage = event => {
-        const data = JSON.parse(event.data);
-        console.log("🚆 Train Data Received:", data);
-        
-        if (data.collection === "train") {
-            updateTrainPositions(data.data); // Update train markers
+        // Utility function for formatting timestamps
+        function formatTimestamp(unixMs) {
+            return unixMs
+                ? new Date(unixMs).toLocaleString('en-GB', {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit',
+                    day: '2-digit',
+                    month: 'short'  // e.g. "Jun"
+                })
+                : '';
         }
-    };
-
-    trainSocket.onerror = error => console.error("🚨 Train WebSocket Error:", error);
-  }
-
-  function initAmbulanceWebSocket() {
-      const ambulanceSocket = new WebSocket("ws://localhost:8000/ws/scan");
-
-      ambulanceSocket.onopen = () => {
-          ambulanceSocket.send(JSON.stringify({ collection: "ambulance" })); // Request ambulance data
-      };
-
-      ambulanceSocket.onmessage = event => {
-          const data = JSON.parse(event.data);
-          console.log("🚑 Ambulance Data Received:", data);
-          
-          if (data.collection === "ambulance") {
-              updateAmbulancePositions(data.data); // Update ambulance markers
-          }
-      };
-
-      ambulanceSocket.onerror = error => console.error("🚨 Ambulance WebSocket Error:", error);
-  }
-
-  // Initialize both WebSocket connections
-  initTrainWebSocket();
-  initAmbulanceWebSocket();
 
 
 
-  
-//     // **定期更新数据**
-//   setInterval(() => {
-//     initAmbulanceWebSocket(); // 每 5 秒重新请求数据
-//   }, 5000);
-
-
-
-
-
-
-  function railsegmentWebSocket() {
-    const railsegmentSocket = new WebSocket("ws://localhost:8000/ws/scan");
-
-    railsegmentSocket.onopen = () => {
-        railsegmentSocket.send(JSON.stringify({ collection: "railsegment" })); // Request railsegment data
-    };
-
-    railsegmentSocket.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-        // console.log("Total Railsegments Received:", data.data.length);
-        // console.log("Received Data:", data); // Debugging: Check full response
-
-        if (data.collection === "railsegment" && Array.isArray(data.data)) {
-            data.data.forEach(entry => {
+        function updateTrainPositions(trains) {
+            trains.forEach(train => {
                 try {
-                    const segmentId = entry[0];  // Segment ID
-                    const geojsonStr = entry[1]; // GeoJSON as string
-                    const metadataStr = entry[2][1]; // Extract the correct JSON string
-                    const metadata = JSON.parse(metadataStr); // Parse metadata as JSON
+                    const id = train[0]; // Extract Train ID
+                    const geojson = JSON.parse(train[1]); // Parse GeoJSON string
+                    const coordinates = geojson.coordinates; // Extract coordinates (lng, lat)
+                    const timestamp = train[2][1]; // Extract timestamp
 
-                    const geojson = JSON.parse(geojsonStr); // Convert GeoJSON string to object
-                    const coordinates = geojson.coordinates;
+                    // Convert [lng, lat] → [lat, lng] for Leaflet
+                    const latlng = [coordinates[1], coordinates[0]];
 
-                    if (geojson.type === "Polygon") {
-                        addPolygonToMap(coordinates, segmentId, metadata);
+                    const popupContent = `🚆 Train ${id}<br/>⏰ ${formatTimestamp(timestamp)}`;
+
+                    console.log(`🛰 Updating train ${id}`);
+                    console.log(`📍 Location: ${latlng}`);
+                    console.log(`🕒 Timestamp: ${timestamp}`);
+
+                    if (!trainMarkers[id]) {
+                        trainMarkers[id] = L.circleMarker(latlng, {
+                            radius: 6,
+                            color: "blue",
+                            fillColor: "blue",
+                            fillOpacity: 0.8
+                        }).addTo(map).bindPopup(popupContent);
+                    } else {
+                        trainMarkers[id].setLatLng(latlng);
+                        if (trainMarkers[id].isPopupOpen()) {
+                            trainMarkers[id].getPopup().setContent(popupContent);
+                        }
                     }
                 } catch (error) {
-                    console.error("🚨 Error parsing segment:", entry, error);
+                    console.error("🚨 Error parsing train data:", train, error);
                 }
             });
-        } else {
-            console.warn("🚨 Unexpected response format:", data);
         }
-    };
 
-    railsegmentSocket.onerror = (error) => console.error("WebSocket Error:", error);
-  }
 
-  function addPolygonToMap(coordinates, segmentId, metadata) {
-    // console.log(`Rendering Segment: ${segmentId}`, coordinates);
+        function initTrainWebSocket() {
+            const trainSocket = new WebSocket("ws://localhost:8000/ws/scan");
 
-    // Convert [lng, lat] → [lat, lng] for Leaflet
-    const formattedCoords = coordinates[0].map(coord => [coord[1], coord[0]]);
+            trainSocket.onopen = () => {
+                trainSocket.send(JSON.stringify({ collection: "train" })); // Request train data
+            };
 
-    // Create the polygon with enhanced transparency
-    const polygon = L.polygon(formattedCoords, {
-        color: "blue",      // Border color
-        fillColor: "blue",  // Fill color
-        weight: 2,          // Border thickness
-        fillOpacity: 0.2    // Increased transparency
-    }).addTo(map);
+            trainSocket.onmessage = event => {
+                const data = JSON.parse(event.data);
+                console.log("🚆 Train Data Received:", data);
 
-    // Automatically remove the polygon after 0.5 seconds
-    setTimeout(() => {
-        map.removeLayer(polygon);
-    }, 500);
+                if (data.collection === "train") {
+                    updateTrainPositions(data.data); // Update train markers
+                }
+            };
 
-    // Bind a click event to show segment info
-    polygon.on("click", () => {
-        const popupContent = `<b>🚆 Segment ID:</b> ${segmentId}<br>
+            trainSocket.onerror = error => console.error("🚨 Train WebSocket Error:", error);
+        }
+
+
+
+        function updateAmbulancePositions(ambulances) {
+            ambulances.forEach(amb => {
+                try {
+                    const id = amb[0]; // Extract Ambulance ID
+                    const geojson = JSON.parse(amb[1]); // Parse GeoJSON string
+                    const coordinates = geojson.coordinates; // Extract coordinates (lng, lat)
+                    const timestamp = amb[2][1]; // Extract timestamp
+
+                    // Convert [lng, lat] → [lat, lng] for Leaflet
+                    const latlng = [coordinates[1], coordinates[0]];
+
+                    const popupContent = `🚑 Ambulance ${id}<br/>⏰ ${formatTimestamp(timestamp)}`;
+
+                    console.log(`🛰 Updating Ambulance ${id}`);
+                    console.log(`📍 Location: ${latlng}`);
+                    console.log(`🕒 Timestamp: ${timestamp}`);
+
+                    if (!ambulanceMarkers[id]) {
+                        ambulanceMarkers[id] = L.circleMarker(latlng, {
+                            radius: 6,
+                            color: "red",
+                            fillColor: "red",
+                            fillOpacity: 0.4
+                        }).addTo(map).bindPopup(popupContent);
+                    } else {
+                        ambulanceMarkers[id].setLatLng(latlng);
+                        if (ambulanceMarkers[id].isPopupOpen()) {
+                            ambulanceMarkers[id].getPopup().setContent(popupContent);
+                        }
+                    }
+                } catch (error) {
+                    console.error("🚨 Error parsing ambulance data:", amb, error);
+                }
+            });
+        }
+
+
+        function initAmbulanceWebSocket() {
+            const ambulanceSocket = new WebSocket("ws://localhost:8000/ws/scan");
+
+            ambulanceSocket.onopen = () => {
+                ambulanceSocket.send(JSON.stringify({ collection: "ambulance" })); // Request ambulance data
+            };
+
+            ambulanceSocket.onmessage = event => {
+                const data = JSON.parse(event.data);
+                console.log("🚑 Ambulance Data Received:", data);
+
+                if (data.collection === "ambulance") {
+                    updateAmbulancePositions(data.data); // Update ambulance markers
+                }
+            };
+
+            ambulanceSocket.onerror = error => console.error("🚨 Ambulance WebSocket Error:", error);
+        }
+
+        // Initialize both WebSocket connections
+        initTrainWebSocket();
+        initAmbulanceWebSocket();
+
+        function drawAmbulanceRoutesFromTile38() {
+            const socket = new WebSocket("ws://localhost:8000/ws/scan");
+
+            socket.onopen = () => {
+                socket.send(JSON.stringify({ collection: "ambu_path2train" }));
+            };
+
+            socket.onmessage = event => {
+                try {
+                    const data = JSON.parse(event.data);
+                    console.log("🚑 Route data received:", data);
+
+                    if (data.collection !== "ambu_path2train" || !Array.isArray(data.data)) {
+                        console.warn("⚠️ Unexpected or missing data for ambu_path2train.");
+                        return;
+                    }
+
+                    if (data.data.length === 0) {
+                        console.log("ℹ️ No routes found in ambu_path2train.");
+                        return;
+                    }
+
+                    data.data.forEach(routeArr => {
+                        const [id, geojsonStr, fieldsArray] = routeArr;
+
+                        // 找到字段 "info"
+                        const infoField = fieldsArray?.find(field => Array.isArray(field) && field[0] === "info");
+                        if (!infoField) return;
+
+                        let info;
+                        try {
+                            info = JSON.parse(infoField[1]);
+                        } catch (e) {
+                            console.warn(`⚠️ Could not parse info field for ${id}:`, e);
+                            return;
+                        }
+
+                        const timedPoints = info.route_points_timed;
+                        if (!Array.isArray(timedPoints) || timedPoints.length === 0) {
+                            console.log(`ℹ️ No timed route points for ${id}`);
+                            return;
+                        }
+
+                        const latlngs = timedPoints.map(pt => [pt.latitude, pt.longitude]);
+
+                        const polyline = L.polyline(latlngs, {
+                            color: '#FF00FF',  // 紫色
+                            weight: 7,         // 线条宽度
+                            opacity: 0.9       // 设置透明度 (0.0 完全透明 - 1.0 完全不透明)
+                        }).addTo(map);
+
+                        polyline.bindPopup(`🚑 Ambulance ${info.ambulance_id || id}`);
+                    });
+                } catch (error) {
+                    console.error("🚨 Failed to process ambu_path2train data:", error);
+                }
+            };
+
+            socket.onerror = err => {
+                console.error("🚨 WebSocket error while loading ambu_path2train:", err);
+            };
+        }
+
+
+        drawAmbulanceRoutesFromTile38();
+
+
+
+
+
+
+        function railsegmentWebSocket() {
+            const railsegmentSocket = new WebSocket("ws://localhost:8000/ws/scan");
+
+            railsegmentSocket.onopen = () => {
+                railsegmentSocket.send(JSON.stringify({ collection: "railsegment" })); // Request railsegment data
+            };
+
+            railsegmentSocket.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                // console.log("Total Railsegments Received:", data.data.length);
+                // console.log("Received Data:", data); // Debugging: Check full response
+
+                if (data.collection === "railsegment" && Array.isArray(data.data)) {
+                    data.data.forEach(entry => {
+                        try {
+                            const segmentId = entry[0];  // Segment ID
+                            const geojsonStr = entry[1]; // GeoJSON as string
+                            const metadataStr = entry[2][1]; // Extract the correct JSON string
+                            const metadata = JSON.parse(metadataStr); // Parse metadata as JSON
+
+                            const geojson = JSON.parse(geojsonStr); // Convert GeoJSON string to object
+                            const coordinates = geojson.coordinates;
+
+                            if (geojson.type === "Polygon") {
+                                addPolygonToMap(coordinates, segmentId, metadata);
+                            }
+                        } catch (error) {
+                            console.error("🚨 Error parsing segment:", entry, error);
+                        }
+                    });
+                } else {
+                    console.warn("🚨 Unexpected response format:", data);
+                }
+            };
+
+            railsegmentSocket.onerror = (error) => console.error("WebSocket Error:", error);
+        }
+
+        function addPolygonToMap(coordinates, segmentId, metadata) {
+            // console.log(`Rendering Segment: ${segmentId}`, coordinates);
+
+            // Convert [lng, lat] → [lat, lng] for Leaflet
+            const formattedCoords = coordinates[0].map(coord => [coord[1], coord[0]]);
+
+            // Create the polygon with enhanced transparency
+            const polygon = L.polygon(formattedCoords, {
+                color: "blue",      // Border color
+                fillColor: "blue",  // Fill color
+                weight: 2,          // Border thickness
+                fillOpacity: 0.2    // Increased transparency
+            }).addTo(map);
+
+            // Automatically remove the polygon after 0.5 seconds
+            setTimeout(() => {
+                map.removeLayer(polygon);
+            }, 500);
+
+            // Bind a click event to show segment info
+            polygon.on("click", () => {
+                const popupContent = `<b>🚆 Segment ID:</b> ${segmentId}<br>
                               <b>Status:</b> ${metadata.status || "Unknown"}<br>
                               <b>Shape Length:</b> ${metadata.SHAPE_Length || "N/A"}<br>
                               <b>Shape Area:</b> ${metadata.SHAPE_Area || "N/A"}`;
-        polygon.bindPopup(popupContent).openPopup();
-    });
-}
+                polygon.bindPopup(popupContent).openPopup();
+            });
+        }
+
+        // railsegmentWebSocket();
 
 
 
-  // railsegmentWebSocket();
 
-
-</script>
+    </script>
 </body>
+
 </html>

@@ -431,9 +431,8 @@ def main():
                             logging.error("❌ best_route['route'] is not a dict! Actual value:")
                             logging.error(route_data)
 
-                        logging.info("best_route eta time: ")
-                        logging.info(travel_time)
-
+                        logging.info(f"best_route eta time: {travel_time}")
+                        # logging.info(travel_time)
 
 
                         try:
@@ -461,7 +460,7 @@ def main():
                                     # logging.info(interval)
 
                                     for idx, pt in enumerate(route_points):
-                                        eta = int(start_timestamp + (idx * interval * 20))  # 转为毫秒级时间戳
+                                        eta = int(start_timestamp + (idx * interval * 30))  # 转为毫秒级时间戳
                                         
                                         # logging.info(pt["latitude"])
                                         # logging.info(pt["longitude"])
