@@ -72,21 +72,157 @@ def create_kafka_consumer():
         sys.exit(1)
 
 
+
+
 def get_busy_object_ids_from_ambu_path():
-    object_ids = []
+    # busy_objects = []
+
+    # try:
+    #     # 判断 ambu_path2train 集合是否有内容（cursor 不为 0 表示还有数据）
+    #     cursor, response = tile38.execute_command("SCAN", "ambu_path2train", "LIMIT", 1)
+    #     if not response or not isinstance(response, list) or len(response) == 0:
+    #         return busy_objects  # 🚫 集合为空，直接返回空列表
+
+    #     # 重新执行带 WITHOBJECT 和 WITHFIELDS 的完整查询
+    #     cursor, response = tile38.execute_command("SCAN", "ambu_path2train", "WITHOBJECT", "WITHFIELDS")
+    #     if response and isinstance(response, list):
+    #         for obj in response:
+    #             full_id = obj[0]
+    #             parts = full_id.split("_")
+    #             if len(parts) >= 3:
+    #                 ambulance_id = parts[-1]
+
+    #                 geojson = json.loads(obj[1]) if isinstance(obj[1], str) else {}
+    #                 coordinates = geojson.get("coordinates", [])
+    #                 lng, lat = coordinates[0], coordinates[1]
+    #                 timestamp = coordinates[2] if len(coordinates) >= 3 else None
+
+    #                 fields = obj[2] if len(obj) > 2 else []
+    #                 info_json = None
+    #                 for field in fields:
+    #                     if isinstance(field, dict) and "route_points_timed" in field:
+    #                         info_json = field
+    #                         break
+
+    #                 if info_json:
+    #                     busy_objects.append({
+    #                         "ambulance_id": ambulance_id,
+    #                         "accident_coordinates": [lat, lng],
+    #                         "incident_time": timestamp,
+    #                         "travel_time": info_json.get("travel_time"),
+    #                         "route_points_timed": info_json.get("route_points_timed")
+    #                     })
+
+
+    ############## ############## ############## ##############
+    ############## ############## ############## ##############
+
+
+    # busy_objects = []
+    # try:
+    #     response = tile38.execute_command(
+    #         "SEARCH", "ambu_path2train",
+    #         "MATCH", "*",
+    #         "LIMIT", 9999,
+    #         "WITHOBJECT", "WITHFIELDS"
+    #     )
+
+    #     if not isinstance(response, dict) or "objects" not in response:
+    #         return busy_objects
+
+    #     for obj in response["objects"]:
+    #         full_id = obj.get("id", "")
+    #         parts = full_id.split("_")
+    #         if len(parts) < 3:
+    #             continue
+    #         ambulance_id = parts[-1]
+
+    #         geojson = obj.get("object", {})
+    #         coordinates = geojson.get("coordinates", [])
+    #         if len(coordinates) < 2:
+    #             continue
+    #         lng, lat = coordinates[0], coordinates[1]
+    #         timestamp = coordinates[2] if len(coordinates) >= 3 else None
+
+    #         info_json = {}
+    #         for field in obj.get("fields", []):
+    #             if isinstance(field, dict) and "info" in field:
+    #                 try:
+    #                     info_json = json.loads(field["info"])
+    #                 except Exception as e:
+    #                     logging.warning(f"Failed to parse 'info' field: {e}")
+    #                 break
+
+    #         if info_json.get("route_points_timed"):
+    #             busy_objects.append({
+    #                 "ambulance_id": ambulance_id,
+    #                 "accident_coordinates": [lat, lng],
+    #                 "incident_time": timestamp,
+    #                 "travel_time": info_json.get("travel_time"),
+    #                 "route_points_timed": info_json["route_points_timed"]
+    #             })
+
+    ############## ############## ############## ##############
+    ############## ############## ############## ##############
+
+    busy_objects = []
     try:
-        cursor, response = tile38.execute_command("SCAN", "ambu_path2train")
-        if response and isinstance(response, list):
+        cursor = 0
+        while True:
+            cursor, response = tile38.execute_command("SCAN", "ambu_path2train", "CURSOR", cursor, "LIMIT", 1000)
+            if not response or not isinstance(response, list):
+                break
+
             for obj in response:
-                full_id = obj[0]  # e.g., "103944_ambu_3"
+                full_id = obj[0]  # e.g., "incident_3144_ambu_3"
                 parts = full_id.split("_")
                 if len(parts) >= 3:
-                    ambulance_id = parts[-1]  # 最后一部分是我们想要的数字部分
-                    object_ids.append(ambulance_id)
+                    ambulance_id = parts[-1]
+
+                    # 解析 GeoJSON 对象
+                    geojson_str = obj[1]
+                    try:
+                        geojson = json.loads(geojson_str)
+                        coordinates = geojson.get("coordinates", [])
+                        if len(coordinates) < 2:
+                            continue
+                        lng, lat = coordinates[0], coordinates[1]
+                        timestamp = coordinates[2] if len(coordinates) >= 3 else None
+                    except Exception as e:
+                        logging.warning(f"Invalid GeoJSON in object {full_id}: {e}")
+                        continue
+
+                    # 解析字段，通常 obj[2] 是 ['info', '{"travel_time":..., "route_points_timed": [...]}']
+                    info_json = {}
+                    if len(obj) > 2:
+                        fields = obj[2]
+                        for i in range(0, len(fields), 2):
+                            if fields[i] == "info":
+                                try:
+                                    info_json = json.loads(fields[i + 1])
+                                except Exception as e:
+                                    logging.warning(f"Failed to parse field info for {full_id}: {e}")
+                                break
+
+                    if info_json.get("route_points_timed"):
+                        busy_objects.append({
+                            "ambulance_id": ambulance_id,
+                            "accident_coordinates": [lat, lng],
+                            "incident_time": timestamp,
+                            "travel_time": info_json.get("travel_time"),
+                            "route_points_timed": info_json["route_points_timed"]
+                        })
+
+            if str(cursor) == "0":
+                break
+
+
     except Exception as e:
         logging.error(f"Failed to scan ambu_path2train: {e}")
-    
-    return object_ids
+
+    return busy_objects
+
+
 
 
 
@@ -116,29 +252,41 @@ def main():
                     fields["direction"] = msg.get("direction")
                     fields["status"] = True
                     fields["accident_location"] = None
-                    
-                else:  # ambulance-locations
+                elif topic == "ambulance-locations":  # ambulance-locations
                     # 提前获取已有的救护车路径对象关联的 vehicle_number 列表
-                    ambu_related_ids = get_busy_object_ids_from_ambu_path()
+                    # 提前获取已分配任务的救护车 ID 列表（如有）
+                    ambu_related_objects = get_busy_object_ids_from_ambu_path()
+                    ambu_related_ids = [obj["ambulance_id"] for obj in ambu_related_objects] if ambu_related_objects else []
 
-                    object_id = msg.get("vehicle_number", f"ambulance_{int(timestamp_ms)}")
+                    # 当前消息中的救护车 ID 和对象 ID
                     vehicle_number = msg.get("vehicle_number")
+                    object_id = vehicle_number if vehicle_number else f"ambulance_{int(timestamp_ms)}"
+                    
+                    # logging.info("ambu object_id: ")
+                    # logging.info(object_id)
+                    # logging.info("ambu_related_ids: ")
+                    # logging.info(ambu_related_ids)
 
-                    fields["vehicle_number"] = vehicle_number
-                    fields["speed"] = msg.get("speed")
-                    fields["heading"] = msg.get("heading")
-                    fields["accuracy"] = msg.get("accuracy")
-                    fields["type"] = msg.get("type")
-                    fields["source"] = msg.get("source")
+                    # Step 1: 先构建常规字段
+                    fields = {
+                        "vehicle_number": vehicle_number,
+                        "speed": msg.get("speed"),
+                        "heading": msg.get("heading"),
+                        "accuracy": msg.get("accuracy"),
+                        "type": msg.get("type"),
+                        "source": msg.get("source"),
+                        "accident_location": None  # 可以在未来动态更新
+                    }
 
-                    # 如果这个救护车已经被分配到一条 ambu_path2train 中了，就标记为“冻结”状态
+                    # Step 2: 判断是否“冻结”（已分配救援任务）
                     if vehicle_number in ambu_related_ids:
-                        fields["status"] = False
+                        # logging.info("vehicle_numer already in ambu_related_ids")
+                        fields["status"] = False  # 冻结
                     else:
                         fields["status"] = True
 
-                    fields["accident_location"] = None
-
+                    # logging.info("ambu status: ")
+                    # logging.info(fields["status"])
 
                 # Initialize existing_fields and update logic
                 existing_fields = {}
@@ -153,34 +301,69 @@ def main():
                         # Check if the object is frozen
                         if existing_fields.get("status") is False:
                             skip_update = True
-                            logging.info(f"🚫 Skipping update for frozen {collection} {object_id}")
+                            # logging.info(f"🚫 Skipping update for frozen {collection} {object_id}")
                         elif "frozen_coords" in existing_fields:
                             fields["frozen_coords"] = existing_fields["frozen_coords"]
 
                 except Exception as e:
                     logging.warning(f"⚠️ Could not fetch existing data for {collection}/{object_id}: {e}")
 
-                # Decide how to store the object in Tile38
-                if not skip_update:
+                if collection == "train": 
+                    if not skip_update:
+                        if fields.get("status") is False:
+                            fields["frozen_coords"] = [lng, lat, timestamp_ms]
+                            geometry = json.dumps({
+                                "type": "Point",
+                                "coordinates": fields["frozen_coords"]
+                            })
+                            tile38.execute_command("SET", collection, object_id, "FIELD", "info", json.dumps(fields), "OBJECT", geometry)
+                        else:
+                            tile38.execute_command("SET", collection, object_id, "FIELD", "info", json.dumps(fields), "POINT", lat, lng, timestamp_ms)
+                    # else:
+                    #     tile38.execute_command(
+                    #         "SET", collection, object_id,
+                    #         "FIELD", "info", json.dumps(fields),
+                    #         "POINT", lat, lng, timestamp_ms
+                    #     )
+                elif collection == "ambulance":
                     if fields.get("status") is False:
-                        fields["frozen_coords"] = [lng, lat, timestamp_ms]
-                        geometry = json.dumps({
-                            "type": "Point",
-                            "coordinates": fields["frozen_coords"]
-                        })
-                        tile38.execute_command("SET", collection, object_id, "FIELD", "info", json.dumps(fields), "OBJECT", geometry)
+                        matched_coord = None
+                        min_time_diff = float("inf")
+
+                        # 查找当前 ambulance_id 是否存在于已有路径对象中
+                        for obj in ambu_related_objects:
+                            if obj["ambulance_id"] == vehicle_number:
+                                for pt in obj.get("route_points_timed", []):
+                                    t_diff = abs(pt["timestamp"] - timestamp_ms)
+                                    if t_diff < min_time_diff:
+                                        min_time_diff = t_diff
+                                        matched_coord = [pt["latitude"], pt["longitude"], pt["timestamp"]]
+
+                        tile38.execute_command(
+                            "SET", collection, object_id,
+                            "FIELD", "info", json.dumps(fields),
+                            "POINT", matched_coord[0], matched_coord[1], matched_coord[2]
+                        )
+                        logging.info(f"update ambu-{object_id} <- matched-coords {matched_coord[0]} {matched_coord[1]} since false status {matched_coord[2]}")
                     else:
-                        tile38.execute_command("SET", collection, object_id, "FIELD", "info", json.dumps(fields), "POINT", lat, lng, timestamp_ms)
+                        logging.info(f"update ambu-{object_id} <- consumer {lat} {lng} since not false status {timestamp_ms}")
+                        tile38.execute_command(
+                            "SET", collection, object_id,
+                            "FIELD", "info", json.dumps(fields),
+                            "POINT", lat, lng, timestamp_ms
+                        )
 
-
-
-
+    
                 # 扫描 broken_train 中的所有对象，找出时间最新的一条
                 latest_broken = None
                 latest_timestamp = -1
 
                 try:
                     cursor, response = tile38.execute_command("SCAN", "broken_train")
+
+                    # if not response or not isinstance(response, list) or len(response) == 0:
+                    #     logging.info("🚧 broken_train is empty or does not exist.")
+                    #     return  # 提前跳过处理
                     if response and isinstance(response, list):
                         for obj in response:
                             try:
@@ -204,13 +387,24 @@ def main():
                             except Exception as e:
                                 logging.warning(f"Failed to parse broken_train obj {obj}: {e}")
 
-                    if latest_broken:
-                        logging.info(f"🚨 Latest incident: {latest_broken['object_id']} at {latest_broken['timestamp']}")
+                    if latest_broken: # only execute this after create incident
+                        # logging.info(f"🚨 Latest incident: {latest_broken['object_id']} at {latest_broken['timestamp']}")
 
                         ambulance_positions = fetch_ambulance_positions()
+                        
+                        # logging.info("ambulance_positions")
+                        # logging.info(ambulance_positions)
+                        # logging.info("latest_broken['object_id']")
+                        # logging.info(latest_broken['object_id'])
+                        # logging.info("latest_broken['timestamp']")
+                        # logging.info(latest_broken['timestamp'])
 
-                        logging.info(ambulance_positions)
-                        logging.info("ambulance_positions")
+                        # for ambu in ambulance_positions:
+                        #     logging.info(ambu["lat"])
+                        #     logging.info(ambu["lng"])
+                        #     logging.info(latest_broken["lat"])
+                        #     logging.info(latest_broken["lng"])
+
 
                         ambu_routes = [
                             {
@@ -219,37 +413,85 @@ def main():
                             }
                             for ambu in ambulance_positions
                         ]
-
+                        
+                        
                         best_route = min(
                             ambu_routes,
                             key=lambda x: x["route"]["routes"][0]["legs"][0]["summary"]["travelTimeInSeconds"]
                         )
                         
+                        # logging.info("best_route: ")
                         # logging.info(best_route)
-                        logging.info("best_route eta time: ")
-                        logging.info({best_route["route"]["routes"][0]["legs"][0]["summary"]["travelTimeInSeconds"]})
-
-                        ambu_path_fields = {
-                            "ambulance_id": best_route["ambulance_id"],
-                            "travel_time": best_route["route"]["routes"][0]["legs"][0]["summary"]["travelTimeInSeconds"],
-                            "route_points": best_route["route"]["routes"][0]["legs"][0]["points"]
-                        }
-
-                        ambu_path_ambu_id_train_id = f"{latest_broken['object_id']}_ambu_{best_route["ambulance_id"]}"
-
                         
-                        tile38.execute_command(
-                            "SET", "ambu_path2train", ambu_path_ambu_id_train_id,
-                            "FIELD", "info", json.dumps(ambu_path_fields),
-                            "OBJECT", json.dumps(latest_broken["geojson"])
-                        )
+                        # logging.info(best_route)
+                        route_data = best_route.get("route")
+                        if isinstance(route_data, dict):
+                            travel_time = route_data["routes"][0]["legs"][0]["summary"]["travelTimeInSeconds"]
+                        else:
+                            logging.error("❌ best_route['route'] is not a dict! Actual value:")
+                            logging.error(route_data)
 
+                        logging.info("best_route eta time: ")
+                        logging.info(travel_time)
+
+
+
+                        try:
+                            ambu_path_ambu_id_train_id = f"{latest_broken['object_id']}_ambu_{best_route['ambulance_id']}"
+
+                            existing = tile38.execute_command("GET", "ambu_path2train", ambu_path_ambu_id_train_id)
+
+                            # logging.info("existing: ")
+                            # logging.info(existing)
+
+                            if not existing:
+                                route_points = best_route["route"]["routes"][0]["legs"][0]["points"]
+                                travel_time = best_route["route"]["routes"][0]["legs"][0]["summary"]["travelTimeInSeconds"]
+                                start_timestamp = latest_broken["timestamp"]
+
+                                # logging.info("travel_time: ")
+                                # logging.info(travel_time)
+
+                                num_points = len(route_points)
+                                timed_points = []
+                                if num_points > 0:
+                                    # 时间间隔 = 总耗时 / 点数，单位秒
+                                    interval = travel_time / num_points
+                                    # logging.info("interval: ")
+                                    # logging.info(interval)
+
+                                    for idx, pt in enumerate(route_points):
+                                        eta = int(start_timestamp + (idx * interval * 20))  # 转为毫秒级时间戳
+                                        
+                                        # logging.info(pt["latitude"])
+                                        # logging.info(pt["longitude"])
+                                        timed_points.append({
+                                            "latitude": pt["latitude"],
+                                            "longitude": pt["longitude"],
+                                            "timestamp": eta  # or "z": eta
+                                        })
+
+                                ambu_path_fields = {
+                                    "ambulance_id": best_route["ambulance_id"],
+                                    "travel_time": travel_time,
+                                    # "route_points": route_points,
+                                    "route_points_timed": timed_points  # ✅ 新增字段，包含时间信息
+                                }
+
+
+                                tile38.execute_command(
+                                    "SET", "ambu_path2train", ambu_path_ambu_id_train_id,
+                                    "FIELD", "info", json.dumps(ambu_path_fields),
+                                    "OBJECT", json.dumps(latest_broken["geojson"])
+                                )
+
+
+                            else:
+                                logging.info(f"🚫 ID {ambu_path_ambu_id_train_id} already exists in ambu_path2train. Skipped.")
+                        except Exception as e:
+                            logging.error(f"⚠️ Error checking for existing ambu_path2train object {ambu_path_ambu_id_train_id}: {e}")
                 except Exception as e:
                     logging.error(f"🚨 Error while scanning and processing broken_train data: {e}")
-
-
-
-
 
 
             except Exception as e:

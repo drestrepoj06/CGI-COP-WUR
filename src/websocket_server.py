@@ -293,7 +293,7 @@ async def scan_websocket(websocket: WebSocket):
                     if cursor == 0:  # 🌍 If cursor is 0, all data has been retrieved
                         break
 
-                print(f"[DEBUG] Total records fetched: {len(all_records)}")  # Log full dataset size
+                # print(f"[DEBUG] Total records fetched: {len(all_records)}")  # Log full dataset size
 
                 raw_data = {"collection": collection, "data": all_records}  # Prepare data
                 await websocket.send_text(json.dumps(raw_data))  # Send data to client
