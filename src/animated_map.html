@@ -107,8 +107,8 @@
                     const popupContent = `🚆 Train ${id}<br/>⏰ ${formatTimestamp(timestamp)}`;
 
                     console.log(`🛰 Updating train ${id}`);
-                    console.log(`📍 Location: ${latlng}`);
-                    console.log(`🕒 Timestamp: ${timestamp}`);
+                    // console.log(`📍 Location: ${latlng}`);
+                    // console.log(`🕒 Timestamp: ${timestamp}`);
 
                     if (!trainMarkers[id]) {
                         trainMarkers[id] = L.circleMarker(latlng, {
@@ -165,8 +165,8 @@
                     const popupContent = `🚑 Ambulance ${id}<br/>⏰ ${formatTimestamp(timestamp)}`;
 
                     console.log(`🛰 Updating Ambulance ${id}`);
-                    console.log(`📍 Location: ${latlng}`);
-                    console.log(`🕒 Timestamp: ${timestamp}`);
+                    // console.log(`📍 Location: ${latlng}`);
+                    // console.log(`🕒 Timestamp: ${timestamp}`);
 
                     if (!ambulanceMarkers[id]) {
                         ambulanceMarkers[id] = L.circleMarker(latlng, {
@@ -211,6 +211,9 @@
         initTrainWebSocket();
         initAmbulanceWebSocket();
 
+
+
+
         function drawAmbulanceRoutesFromTile38() {
             const socket = new WebSocket("ws://localhost:8000/ws/scan");
 
@@ -218,64 +221,57 @@
                 socket.send(JSON.stringify({ collection: "ambu_path2train" }));
             };
 
-            socket.onmessage = event => {
+            socket.onmessage = (event) => {
                 try {
                     const data = JSON.parse(event.data);
-                    console.log("🚑 Route data received:", data);
-
                     if (data.collection !== "ambu_path2train" || !Array.isArray(data.data)) {
-                        console.warn("⚠️ Unexpected or missing data for ambu_path2train.");
+                        console.warn("⚠️ Unexpected ambu_path2train data.");
                         return;
                     }
 
-                    if (data.data.length === 0) {
-                        console.log("ℹ️ No routes found in ambu_path2train.");
-                        return;
-                    }
+                    data.data.forEach(item => {
+                        const [id, geojsonStr, fieldArr] = item;
 
-                    data.data.forEach(routeArr => {
-                        const [id, geojsonStr, fieldsArray] = routeArr;
-
-                        // 找到字段 "info"
-                        const infoField = fieldsArray?.find(field => Array.isArray(field) && field[0] === "info");
-                        if (!infoField) return;
+                        if (!Array.isArray(fieldArr) || fieldArr[0] !== "info") return;
 
                         let info;
                         try {
-                            info = JSON.parse(infoField[1]);
-                        } catch (e) {
-                            console.warn(`⚠️ Could not parse info field for ${id}:`, e);
+                            info = JSON.parse(fieldArr[1]);
+                        } catch (err) {
+                            console.warn(`⚠️ Invalid info for ${id}:`, err);
                             return;
                         }
 
-                        const timedPoints = info.route_points_timed;
-                        if (!Array.isArray(timedPoints) || timedPoints.length === 0) {
-                            console.log(`ℹ️ No timed route points for ${id}`);
-                            return;
-                        }
+                        // console.log("fieldArr: ", fieldArr)
+                        // console.log("info: ", info)
 
-                        const latlngs = timedPoints.map(pt => [pt.latitude, pt.longitude]);
+                        const points = info.route_points_timed;
+                        // console.log("points: ", points)
+
+                        if (!Array.isArray(points) || points.length === 0) return;
+
+                        const latlngs = points.map(p => [p.latitude, p.longitude]);
 
                         const polyline = L.polyline(latlngs, {
-                            color: '#FF00FF',  // 紫色
-                            weight: 7,         // 线条宽度
-                            opacity: 0.9       // 设置透明度 (0.0 完全透明 - 1.0 完全不透明)
+                            color: "#FF00FF",
+                            weight: 6,
+                            opacity: 0.9
                         }).addTo(map);
 
                         polyline.bindPopup(`🚑 Ambulance ${info.ambulance_id || id}`);
                     });
-                } catch (error) {
-                    console.error("🚨 Failed to process ambu_path2train data:", error);
+                } catch (err) {
+                    console.error("🚨 Failed to render ambu_path2train:", err);
                 }
             };
 
-            socket.onerror = err => {
-                console.error("🚨 WebSocket error while loading ambu_path2train:", err);
+            socket.onerror = (err) => {
+                console.error("🚨 WebSocket error (ambu_path2train):", err);
             };
         }
 
-
         drawAmbulanceRoutesFromTile38();
+
 
 
 
