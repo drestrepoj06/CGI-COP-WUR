@@ -13,7 +13,7 @@ from utils.join_query import record_ambulance_path
 
 # Streamlit app setup
 st.set_page_config(
-    page_title="RCOP Dashboard",
+    page_title="RCOP Meldkamer Spoor",
     page_icon="🚅",
     layout="wide",
     initial_sidebar_state="collapsed",
@@ -165,7 +165,7 @@ async def fetch_and_display_positions():
 # Main dashboard layout setup
 async def main():
     with st.sidebar:
-        st.title("RCOP Dashboard")
+        st.title("RCOP Meldkamer Spoor")
 
     # Initialize session states
     if 'button_states' not in st.session_state:
@@ -195,6 +195,7 @@ async def main():
             # Create cleaned-up incident dict
             clean_incident = {
                 "train_id": st.session_state['incident_data']["train_id"],
+                "train_type": st.session_state['incident_data'].get("train_type", "Unknown"),
                 "severity": (st.session_state['incident_data']["severity"]).capitalize(),
                 "description": (st.session_state['incident_data']["description"]).capitalize(),
                 "lat": lat,
@@ -210,6 +211,7 @@ async def main():
                     {clean_incident['lat']},
                     {clean_incident['lng']},
                     "{clean_incident['train_id']}",
+                    "{clean_incident['train_type']}",
                     "{clean_incident['severity']}",
                     "{clean_incident['description']}"
                 );
@@ -264,6 +266,7 @@ async def main():
 
             clean_incident = {
                 "train_id": st.session_state['incident_data']["train_id"],
+                "train_type": st.session_state['incident_data'].get("train_type", "Unknown"),
                 "lat": lat,
                 "lng": lng,
                 "timestamp": timestamp,
@@ -279,7 +282,8 @@ async def main():
 
             st.markdown(f"""
             ### 🚨 Incident Summary  
-            - **Train ID**: {clean_incident['train_id']}  
+            - **Train ID**: {clean_incident['train_id']}
+            - **Train Type**: {clean_incident['train_type']}
             - **Location**: {clean_incident['lat']}, {clean_incident['lng']}  
             - **Timestamp**: {readable_time} UTC  
             - **Passengers Affected**: {clean_incident['affected_passengers']}  
