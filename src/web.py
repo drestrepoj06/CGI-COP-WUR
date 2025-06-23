@@ -19,9 +19,12 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s: %(message)s")
+logging.basicConfig(level=logging.INFO,
+                    format="%(asctime)s %(levelname)s: %(message)s")
 
 # Donut chart generator
+
+
 def make_pie_chart(usage_percentage, station_name, color_scheme):
     colors = {
         'blue': ['#29b5e8', '#155F7A'],
@@ -43,12 +46,14 @@ def make_pie_chart(usage_percentage, station_name, color_scheme):
     ).properties(width=130, height=130, title=station_name)
 
 # Load animated map HTML
-def load_map_html(filepath="animated_map.html", route_points = None):
+
+
+def load_map_html(filepath="animated_map.html", route_points=None):
     # Load rails GeoJSON
     with open("utils/UtrechtRails.geojson", "r") as f:
         rails_geojson = json.load(f)
     rails_js = json.dumps(rails_geojson)
-    
+
     # Load Ambulance Stations
     with open("utils/AmbulanceStations.geojson", "r") as f:
         ambulance_stations_geojson = json.load(f)
@@ -60,13 +65,18 @@ def load_map_html(filepath="animated_map.html", route_points = None):
     # 读取 HTML 文件并插入数据
     with open(filepath, "r") as f:
         html = f.read()
-        html = html.replace("//__INSERT_RAILS_HERE__", f"const railsData = {rails_js};")
-        html = html.replace("//__INSERT_AMBULANCE_STATIONS_HERE__", f"const ambulanceStationsData = {ambulance_stations_js};")
-        html = html.replace("//__INSERT_ROUTE_POINTS_HERE__", f"const routePoints = {route_points_js};")
+        html = html.replace("//__INSERT_RAILS_HERE__",
+                            f"const railsData = {rails_js};")
+        html = html.replace("//__INSERT_AMBULANCE_STATIONS_HERE__",
+                            f"const ambulanceStationsData = {ambulance_stations_js};")
+        html = html.replace("//__INSERT_ROUTE_POINTS_HERE__",
+                            f"const routePoints = {route_points_js};")
 
     return html
 
 # Display ambulance data table
+
+
 def display_ambulance_data():
     st.subheader("Ambulance station availability")
 
@@ -77,7 +87,8 @@ def display_ambulance_data():
         "Capacity": [5, 6, 4, 8]
     })
 
-    ambulance_data["In Use"] = ambulance_data["Capacity"] - ambulance_data["Ambulances"]
+    ambulance_data["In Use"] = ambulance_data["Capacity"] - \
+        ambulance_data["Ambulances"]
 
     st.dataframe(
         ambulance_data,
@@ -92,6 +103,8 @@ def display_ambulance_data():
     return ambulance_data
 
 # Display ambulance availability charts
+
+
 def display_availability_charts(ambulance_data):
     st.subheader("Ambulance availability")
 
@@ -102,12 +115,16 @@ def display_availability_charts(ambulance_data):
     for i, row in ambulance_data.iterrows():
         usage_percentage = int((row["In Use"] / row["Capacity"]) * 100)
         with cols[i]:
-            st.altair_chart(make_pie_chart(usage_percentage, row["Station"], color_options[i]))
+            st.altair_chart(make_pie_chart(usage_percentage,
+                            row["Station"], color_options[i]))
+
 
 # Redis client
 client = redis.Redis(host="tile38", port=9851, decode_responses=True)
 
 # Synchronous function to mark a random train as inactive
+
+
 def stop_random_train():
     try:
         result = mark_random_train_as_inactive(client)
@@ -116,6 +133,7 @@ def stop_random_train():
     except Exception as e:
         logging.error(f"[ERROR] mark_random_train_as_inactive() failed: {e}")
         return False
+
 
 async def fetch_and_display_positions():
     """
@@ -130,11 +148,12 @@ async def fetch_and_display_positions():
 
     # 提取所需数据，并检查 key 是否存在
     ambulance_id = routes.get("ambulance_id", None)
-    route_points = [(point["latitude"], point["longitude"]) for point in routes.get("route_points", [])]
+    route_points = [(point["latitude"], point["longitude"])
+                    for point in routes.get("route_points", [])]
     timestamp = routes.get("timestamp", None)
     route_estimated_time = routes.get("route_estimated_time", None)
 
-    await record_ambulance_path(route_points, timestamp, route_estimated_time, ambulance_id)
+    # await record_ambulance_path(route_points, timestamp, route_estimated_time, ambulance_id)
 
     # # 显示 JSON 数据
     # st.json(routes)
@@ -162,13 +181,14 @@ async def main():
     # Left column: ambulance data and charts
     with col[0]:
         ambulance_data = display_ambulance_data()
-        
+
     # Middle column: animated map
     with col[1]:
         route_points, timestamp, route_estimated_time = await fetch_and_display_positions()
         incident_js = ""
         if st.session_state['button_states']['show_incident'] and st.session_state.get('incident_data'):
-            coords = st.session_state['incident_data']["location"].get("coordinates", [])
+            coords = st.session_state['incident_data']["location"].get(
+                "coordinates", [])
             lng, lat = coords[0], coords[1]
             timestamp = int(coords[2]) if len(coords) > 2 else None
 
@@ -195,13 +215,14 @@ async def main():
                 );
             </script>
             """
-        st.components.v1.html(load_map_html(route_points=route_points) + incident_js, height=500, scrolling=False)
+        st.components.v1.html(load_map_html() + incident_js,
+                              height=500, scrolling=False)
         display_availability_charts(ambulance_data)
 
     # Right column: Incident/Train control
     with col[2]:
         st.markdown("### Train Control")
-       
+
         # Button to stop a random train (simulate incident)
         if st.button(
             "🛑 Simulate an incident",
@@ -236,7 +257,8 @@ async def main():
         st.markdown("---")
         if st.session_state['button_states']['show_incident'] and st.session_state.get('incident_data'):
             st.success("An incident was simulated!")
-            coords = st.session_state['incident_data']["location"].get("coordinates", [])
+            coords = st.session_state['incident_data']["location"].get(
+                "coordinates", [])
             lng, lat = coords[0], coords[1]
             timestamp = int(coords[2]) if len(coords) > 2 else None
 
@@ -252,7 +274,8 @@ async def main():
 
             # Display as JSON or table
             ts = clean_incident["timestamp"]
-            readable_time = datetime.utcfromtimestamp(ts / 1000).strftime('%Y-%m-%d %H:%M:%S')
+            readable_time = datetime.utcfromtimestamp(
+                ts / 1000).strftime('%Y-%m-%d %H:%M:%S')
 
             st.markdown(f"""
             ### 🚨 Incident Summary  
@@ -267,7 +290,7 @@ async def main():
         # Display reset success notification if active
         if st.session_state['button_states']['show_reset_success']:
             st.success("All trains have been reset to active status!")
-        
+
 # Run the dashboard
 if __name__ == "__main__":
     asyncio.run(main())

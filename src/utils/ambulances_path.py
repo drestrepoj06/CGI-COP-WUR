@@ -17,6 +17,7 @@ ambulance_origins = [
 ]
 destination = (52.1100, 5.1253)
 
+
 def get_route_points(origin, destination):
     url = (
         f"https://api.tomtom.com/routing/1/calculateRoute/"
@@ -31,14 +32,17 @@ def get_route_points(origin, destination):
         print(f"Error fetching route: {e}")
         return []
 
+
 def calculate_bearing(p1, p2):
     lat1, lon1 = map(math.radians, p1)
     lat2, lon2 = map(math.radians, p2)
     dlon = lon2 - lon1
     x = math.sin(dlon) * math.cos(lat2)
-    y = math.cos(lat1) * math.sin(lat2) - math.sin(lat1) * math.cos(lat2) * math.cos(dlon)
+    y = math.cos(lat1) * math.sin(lat2) - math.sin(lat1) * \
+        math.cos(lat2) * math.cos(dlon)
     bearing = math.atan2(x, y)
     return (math.degrees(bearing) + 360) % 360
+
 
 # Precompute routes
 routes = [get_route_points(o, destination) for o in ambulance_origins]
@@ -62,7 +66,8 @@ while time.time() < end_time:
         prev = route[idx - 1] if idx > 0 else curr
 
         lat, lng = curr["latitude"], curr["longitude"]
-        bearing = calculate_bearing((prev["latitude"], prev["longitude"]), (lat, lng))
+        bearing = calculate_bearing(
+            (prev["latitude"], prev["longitude"]), (lat, lng))
         speed = round(random.uniform(30, 70), 2)
 
         ambulance_snapshots.append({

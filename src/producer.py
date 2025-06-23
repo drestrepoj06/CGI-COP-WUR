@@ -11,7 +11,8 @@ from kafka.admin import NewTopic
 from kafka.errors import KafkaError, TopicAlreadyExistsError
 
 # Configure logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
+logging.basicConfig(level=logging.INFO,
+                    format='%(asctime)s %(levelname)s %(message)s')
 
 # Kafka configuration
 KAFKA_BROKER = 'kafka:9092'
@@ -30,14 +31,17 @@ def create_kafka_admin(max_retries=5, retry_interval=5):
                 bootstrap_servers=[KAFKA_BROKER],
                 api_version=(3, 0, 0)
             )
-            logging.info(f"✅ Successfully connected to Kafka Broker: {KAFKA_BROKER}")
+            logging.info(
+                f"✅ Successfully connected to Kafka Broker: {KAFKA_BROKER}")
             return admin
         except Exception as e:
             if i == max_retries - 1:
                 logging.error(f"❌ Failed to create KafkaAdminClient: {e}")
                 raise
-            logging.warning(f"⚠️ Connection failed ({i+1}/{max_retries}), retrying in {retry_interval}s...")
+            logging.warning(
+                f"⚠️ Connection failed ({i+1}/{max_retries}), retrying in {retry_interval}s...")
             time.sleep(retry_interval)
+
 
 def ensure_topics_exist(admin_client=None):
     """Ensure required Kafka topics exist"""
@@ -45,18 +49,18 @@ def ensure_topics_exist(admin_client=None):
         if admin_client is None:
             admin_client = create_kafka_admin()
 
-
         existing_topics = admin_client.list_topics()
         topics_to_create = [t for t in TOPICS if t not in existing_topics]
 
-
         if topics_to_create:
-            topic_list = [NewTopic(topic, num_partitions=1, replication_factor=1) for topic in topics_to_create]
-            admin_client.create_topics(new_topics=topic_list, validate_only=False)
-            logging.info(f"✅ Created {len(topic_list)} topics: {', '.join(topics_to_create)}")
+            topic_list = [NewTopic(
+                topic, num_partitions=1, replication_factor=1) for topic in topics_to_create]
+            admin_client.create_topics(
+                new_topics=topic_list, validate_only=False)
+            logging.info(
+                f"✅ Created {len(topic_list)} topics: {', '.join(topics_to_create)}")
         else:
             logging.info(f"ℹ️ All topics already exist: {', '.join(TOPICS)}")
-
 
     except TopicAlreadyExistsError:
         logging.info(f"ℹ️ Topics already exist: {', '.join(TOPICS)}")
@@ -67,10 +71,12 @@ def ensure_topics_exist(admin_client=None):
         if admin_client:
             admin_client.close()
 
+
 def parse_timestamp(ts_str):
     """Convert ISO timestamp string to milliseconds since epoch."""
     dt = datetime.fromisoformat(ts_str)
     return int(dt.timestamp() * 1000)
+
 
 def load_train_logs():
     """Load train log data from JSON file"""
@@ -82,6 +88,7 @@ def load_train_logs():
     except Exception as e:
         logging.error(f"Failed to load train logs: {e}")
         return []
+
 
 def load_ambulance_logs():
     """Load ambulance log data from JSON file."""
@@ -95,11 +102,11 @@ def load_ambulance_logs():
         return []
 
 
-
 def parse_timestamp(ts_str):
     """Convert ISO timestamp string to milliseconds since epoch."""
     dt = datetime.fromisoformat(ts_str)
     return int(dt.timestamp() * 1000)
+
 
 def load_train_logs():
     """Load train log data from JSON file"""
@@ -112,6 +119,7 @@ def load_train_logs():
         logging.error(f"Failed to load train logs: {e}")
         return []
 
+
 def load_ambulance_logs():
     """Load ambulance log data from JSON file."""
     try:
@@ -122,8 +130,10 @@ def load_ambulance_logs():
     except Exception as e:
         logging.error(f"Failed to load ambulance logs: {e}")
         return []
+
 
 tile38 = redis.Redis(host='tile38', port=9851, decode_responses=True)
+
 
 def produce_train_messages():
     """Produce train location messages and create geofences for stopped trains"""
@@ -161,6 +171,7 @@ def produce_train_messages():
         logging.error(f"🚨 Train producer error: {e}")
     finally:
         producer.close()
+
 
 def produce_ambulance_messages():
     """Produce ambulance location messages in batches based on timestamps"""
@@ -207,13 +218,16 @@ def produce_ambulance_messages():
     finally:
         producer.close()
 
+
 def main():
     try:
         ensure_topics_exist()
-        
-        train_thread = threading.Thread(target=produce_train_messages, daemon=True)
-        ambulance_thread = threading.Thread(target=produce_ambulance_messages, daemon=True)
-        
+
+        train_thread = threading.Thread(
+            target=produce_train_messages, daemon=True)
+        ambulance_thread = threading.Thread(
+            target=produce_ambulance_messages, daemon=True)
+
         train_thread.start()
         ambulance_thread.start()
 
@@ -228,6 +242,7 @@ def main():
         sys.exit(1)
     finally:
         logging.info("Application shutdown complete")
+
 
 if __name__ == "__main__":
     main()

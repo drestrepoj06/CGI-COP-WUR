@@ -5,7 +5,7 @@ from datetime import datetime
 from geopy.distance import geodesic
 
 API_KEY = "43846b8fddcf4e2bb41def8291de6bf4"
-CENTER = (52.094040, 5.093102)  
+CENTER = (52.094040, 5.093102)
 MAX_DIST_km = 6.150
 
 headers = {
@@ -18,15 +18,18 @@ end_time = time.time() + duration_minutes * 60
 
 all_data = []
 
+
 def is_within_radius(train):
     coords = train.get("lat"), train.get("lng")
     if None in coords:
         return False
     return geodesic(CENTER, coords).km <= MAX_DIST_km
 
+
 while time.time() < end_time:
     try:
-        response = requests.get("https://gateway.apiportal.ns.nl/virtual-train-api/vehicle", headers=headers)
+        response = requests.get(
+            "https://gateway.apiportal.ns.nl/virtual-train-api/vehicle", headers=headers)
         response.raise_for_status()
         all_trains = response.json().get("payload", {}).get("treinen", [])
         nearby_trains = [t for t in all_trains if is_within_radius(t)]
