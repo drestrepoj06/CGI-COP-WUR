@@ -135,23 +135,23 @@ def stop_random_train():
         return False
 
 
-async def fetch_and_display_positions():
-    """
-    Fetch ambulance and broken train positions and display them in the dashboard.
-    """
-    positions = await fetch_ambu_broken_train_positions()
-    routes = await calculate_optimal_path(positions)
+# async def fetch_and_display_positions():
+#    """
+#    Fetch ambulance and broken train positions and display them in the dashboard.
+#    """
+#    positions = await fetch_ambu_broken_train_positions()
+#    routes = await calculate_optimal_path(positions)
 
     # 确保 routes 不是 None 或者空字典
-    if not routes or not isinstance(routes, dict):
-        return [], None, None
+#    if not routes or not isinstance(routes, dict):
+#       return [], None, None
 
     # 提取所需数据，并检查 key 是否存在
-    ambulance_id = routes.get("ambulance_id", None)
-    route_points = [(point["latitude"], point["longitude"])
-                    for point in routes.get("route_points", [])]
-    timestamp = routes.get("timestamp", None)
-    route_estimated_time = routes.get("route_estimated_time", None)
+#    ambulance_id = routes.get("ambulance_id", None)
+#    route_points = [(point["latitude"], point["longitude"])
+#                    for point in routes.get("route_points", [])]
+#    timestamp = routes.get("timestamp", None)
+#    route_estimated_time = routes.get("route_estimated_time", None)
 
     # await record_ambulance_path(route_points, timestamp, route_estimated_time, ambulance_id)
 
@@ -159,7 +159,7 @@ async def fetch_and_display_positions():
     # st.json(routes)
 
     # 返回多个值（如果为空，则返回适当的空值）
-    return route_points, timestamp, route_estimated_time
+#    return route_points, timestamp, route_estimated_time
 
 
 # Main dashboard layout setup
@@ -184,27 +184,29 @@ async def main():
 
     # Middle column: animated map
     with col[1]:
-        route_points, timestamp, route_estimated_time = await fetch_and_display_positions()
+        #route_points, timestamp, route_estimated_time = await fetch_and_display_positions()
+
+        # Default map HTML
+        map_html = load_map_html()
         incident_js = ""
+        segment_js = ""
+
+        # Inject incident and segment overlays if available
         if st.session_state['button_states']['show_incident'] and st.session_state.get('incident_data'):
-            coords = st.session_state['incident_data']["location"].get(
-                "coordinates", [])
+            coords = st.session_state['incident_data']["location"].get("coordinates", [])
             lng, lat = coords[0], coords[1]
             timestamp = int(coords[2]) if len(coords) > 2 else None
 
-            # Create cleaned-up incident dict
             clean_incident = {
                 "train_id": st.session_state['incident_data']["train_id"],
                 "train_type": st.session_state['incident_data'].get("train_type", "Unknown"),
-                "severity": (st.session_state['incident_data']["severity"]).capitalize(),
-                "description": (st.session_state['incident_data']["description"]).capitalize(),
+                "severity": st.session_state['incident_data']["severity"].capitalize(),
+                "description": st.session_state['incident_data']["description"].capitalize(),
                 "lat": lat,
                 "lng": lng,
                 "timestamp": timestamp
             }
 
-            # Display as JSON or table
-            ts = clean_incident["timestamp"]
             incident_js = f"""
             <script>
                 showIncidentPopup(
@@ -217,9 +219,29 @@ async def main():
                 );
             </script>
             """
-        st.components.v1.html(load_map_html() + incident_js,
-                              height=500, scrolling=False)
+
+            inactive_segments = st.session_state.get("inactive_segments", [])
+            if inactive_segments:
+                js_segments = json.dumps(inactive_segments)
+                segment_js = f"""
+                <script>
+                    const inactiveSegments = {js_segments};
+                    inactiveSegments.forEach(segment => {{
+                        L.geoJSON(segment, {{
+                            style: {{
+                                color: 'red',
+                                weight: 3,
+                                opacity: 0.7
+                            }}
+                        }}).addTo(map);
+                    }});
+                </script>
+                """
+
+        # Always render the map + optional overlays
+        st.components.v1.html(map_html + incident_js + segment_js, height=500, scrolling=False)
         display_availability_charts(ambulance_data)
+
 
     # Right column: Incident/Train control
     with col[2]:
@@ -237,7 +259,8 @@ async def main():
             st.session_state['button_states']['show_reset_success'] = False
             incident = stop_random_train()
             if incident:
-                st.session_state['incident_data'] = incident
+                st.session_state['incident_data'] = incident["incident"]
+                st.session_state['inactive_segments'] = incident.get("inactive_segments", [])
                 st.session_state['button_states']['show_incident'] = True
             st.rerun()
         st.caption("(This stops a random train)")
