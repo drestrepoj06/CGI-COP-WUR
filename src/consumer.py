@@ -375,14 +375,13 @@ def main():
                             logging.warning(
                                 f"⚠️ No matched coordinates found for {vehicle_number}, skipping POINT update.")
                     else:
-                        # logging.info(
-                        #     f"update ambu-{object_id} <- consumer {lat} {lng} since not false status {timestamp_ms}")
+                        logging.info(
+                            f"update ambu-{object_id} <- consumer {lat} {lng} since not false status {timestamp_ms}")
                         tile38.execute_command(
                             "SET", collection, object_id,
                             "FIELD", "info", json.dumps(fields),
                             "POINT", lat, lng, timestamp_ms
                         )
-
 
                 latest_broken = None
                 latest_timestamp = -1
@@ -397,14 +396,16 @@ def main():
                         for obj in response:
                             try:
 
-                                object_id = obj[0].split("_")[1] # train_id
-                                geojson_obj = json.loads(obj[1]) # {"type":"Point","coordinates":[5.1060586,52.093464,1750411271244]}
+                                object_id = obj[0].split("_")[1]  # train_id
+                                # {"type":"Point","coordinates":[5.1060586,52.093464,1750411271244]}
+                                geojson_obj = json.loads(obj[1])
 
                                 # logging.info(f"🕵️ geojson_obj = {geojson_obj} (type: {type(geojson_obj)})")
 
-                                coords = geojson_obj.get("coordinates", []) # [5.1060586,52.093464,1750411271244]
+                                # [5.1060586,52.093464,1750411271244]
+                                coords = geojson_obj.get("coordinates", [])
 
-                                timestamp = coords[2] # 1750411271244
+                                timestamp = coords[2]  # 1750411271244
                                 if timestamp > latest_timestamp:
                                     latest_timestamp = timestamp
                                     latest_broken = {
@@ -425,20 +426,25 @@ def main():
                         existing_object_ids = []
 
                         while True:
-                            cursor, result = tile38.execute_command("SCAN", "ambu_path2train", "MATCH", "*_ambu_*")
-                            objects = result if isinstance(result, list) else []
+                            cursor, result = tile38.execute_command(
+                                "SCAN", "ambu_path2train", "MATCH", "*_ambu_*")
+                            objects = result if isinstance(
+                                result, list) else []
 
                             for obj in objects:
-                                key = obj[0] if isinstance(obj, list) else obj.get("id", "")
+                                key = obj[0] if isinstance(
+                                    obj, list) else obj.get("id", "")
                                 if "_ambu_" in key:
                                     existing_object_id = key.split("_ambu_")[0]
-                                    existing_object_ids.append(existing_object_id)
+                                    existing_object_ids.append(
+                                        existing_object_id)
 
                             if int(cursor) == 0:
                                 break
 
                         # 输出所有提取的 object_id
-                        # logging.info(f"existing_object_ids: {existing_object_ids}")
+                        logging.info(f"existing_object_ids: {existing_object_ids}")
+                        logging.info(f"latest_broken['object_id']: {latest_broken['object_id']}")
 
                         if latest_broken['object_id'] not in existing_object_ids:
                             ambulance_positions = fetch_ambulance_positions()
@@ -460,7 +466,7 @@ def main():
                             )
 
                             route_data = best_route.get("route")
-                            
+
                             if isinstance(route_data, dict):
                                 travel_time = route_data["routes"][0]["legs"][0]["summary"]["travelTimeInSeconds"]
                             else:
@@ -468,19 +474,16 @@ def main():
                                     "❌ best_route['route'] is not a dict! Actual value:")
                                 logging.error(route_data)
 
-
-
-
                             # logging.info(f"best_route eta time: {travel_time}")
                             # logging.info(travel_time)
 
                             try:
-                                
+
                                 ambu_path_ambu_id_train_id = f"{latest_broken['object_id']}_ambu_{best_route['ambulance_id']}"
 
                                 existing = tile38.execute_command(
                                     "GET", "ambu_path2train", ambu_path_ambu_id_train_id)
-                                
+
                                 # "6737_ambu_1"
 
                                 # logging.info("existing: ")
@@ -494,7 +497,6 @@ def main():
                                     num_points = len(route_points)
                                     timed_points = []
                                     if num_points > 0:
-                                        # 时间间隔 = 总耗时 / 点数，单位秒
                                         interval = travel_time / num_points
                                         # logging.info("interval: ")
                                         # logging.info(interval)
@@ -502,7 +504,7 @@ def main():
                                         for idx, pt in enumerate(route_points):
                                             # 转为毫秒级时间戳
                                             eta = int(start_timestamp +
-                                                    (idx * interval * 1000))
+                                                      (idx * interval * 10000))
 
                                             # logging.info(pt["latitude"])
                                             # logging.info(pt["longitude"])
@@ -532,18 +534,12 @@ def main():
                             except Exception as e:
                                 logging.error(
                                     f"⚠️ Error checking for existing ambu_path2train object {ambu_path_ambu_id_train_id}: {e}")
-                            
-
-
 
                 ##############
 
                 except Exception as e:
                     logging.error(
                         f"🚨 Error while scanning and processing broken_train data: {e}")
-
-
-
 
             except Exception as e:
                 logging.error(f"❌ Failed to send point to Tile38: {e}")
