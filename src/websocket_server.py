@@ -277,148 +277,59 @@ def reset_all_trains(client):
         return "fail"
 
 def mark_random_train_as_inactive(client):
+    """Marks a random visible and active train as inactive (status=False)."""
     try:
-        response = client.execute_command("SCAN", "train")
-        cursor = response[0]
-        items = response[1] if len(response) > 1 else []
-
-        train_ids = []
-        for item in items:
-            if isinstance(item, list) and len(item) > 0:
+        # Get all trains and filter for visible+active ones
+        cursor, response = client.execute_command("SCAN", "train")
+        eligible_trains = []
+        
+        for item in response:
+            try:
                 train_id = item[0]
-                if isinstance(train_id, bytes):
-                    train_id = train_id.decode()
-                train_ids.append(train_id)
-            else:
-                if isinstance(item, bytes):
-                    train_ids.append(item.decode())
-                elif isinstance(item, str):
-                    train_ids.append(item)
+                train_data = client.execute_command(
+                    "GET", "train", train_id, "WITHFIELDS", "OBJECT"
+                )
+                if train_data and len(train_data) >= 2:
+                    info = json.loads(train_data[1][1])  # Parse info fields
+                    if info.get("is_within_area", False) and info.get("status", True):
+                        eligible_trains.append((train_id, train_data))
+            except Exception as e:
+                logger.warning(f"Skipping train {train_id}: {e}")
+                continue
 
-        logger.info(f"Found {len(train_ids)} trains: {train_ids}")
+        if not eligible_trains:
+            logger.warning("No visible active trains available for incidents!")
+            return None
+
+        # Randomly select from eligible trains
+        selected_id, selected_data = random.choice(eligible_trains)
+        logger.info(f"Selected train for incident: {selected_id}")
+
+        # Parse the selected train's data
+        geometry_obj = json.loads(selected_data[0])
+        info_fields = json.loads(selected_data[1][1])
+        
+        # Freeze the train
+        info_fields.update({
+            "status": False,
+            "frozen_coords": geometry_obj["coordinates"]
+        })
+
+        # Update in Tile38
+        client.execute_command(
+            "SET", "train", selected_id,
+            "FIELD", "info", json.dumps(info_fields),
+            "OBJECT", json.dumps(geometry_obj)
+        )
+
+        # Create incident record
+        return create_incident(
+            client, selected_id, geometry_obj,
+            description="Train marked inactive due to incident"
+        )
 
     except Exception as e:
-        logger.error(f"Error scanning trains: {e}", exc_info=True)
-        return False
-
-    selected_id = random.choice(train_ids) # Selected train: {selected_id}
-
-    try:
-        response = client.execute_command("GET", "train", selected_id, "WITHFIELDS", "OBJECT")
-        
-        if response is None:
-            raise ValueError(f"GET command returned None for train ID {selected_id}")
-        
-        if isinstance(response, list) and len(response) >= 2:
-            geometry_obj = json.loads(response[0])
-            
-            info_data = {}
-            if len(response[1]) >= 2:
-                field_key = response[1][0]  # 'info'
-                field_value_str = response[1][1]  # JSON string
-                info_data = json.loads(field_value_str)
-            
-            info_data["status"] = False
-            info_data["frozen_coords"] = geometry_obj["coordinates"]
-
-            train_obj = {
-                "ok": True,
-                "object": geometry_obj,
-                "fields": {
-                    "info": info_data
-                }
-            }
-        else:
-            raise ValueError(f"Unexpected response format: {response}")
-            
-    except Exception as e:
-        logger.error(f"Failed to get object for train {selected_id}: {e}", exc_info=True)
-        return False
-
-    fields = train_obj["fields"]
-    
-    if "info" in fields and isinstance(fields["info"], dict):
-        fields["info"]["status"] = False
-        fields["info"]["frozen_coords"] = train_obj["object"]["coordinates"]
-    else:
-        logger.warning(f"Train {selected_id} does not have expected info structure")
-        return False
-
-    try:
-        geometry_json = json.dumps(train_obj["object"])
-        fields_args = []
-        for field_key, field_value in train_obj["fields"].items():
-            fields_args.extend(["FIELD", field_key, json.dumps(field_value)])
-
-        set_args = ["SET", "train", selected_id] + fields_args + ["OBJECT", geometry_json]
-        logger.info(f"SET command args: {set_args}")
-        client.execute_command(*set_args)
-        logger.info(f"Updated train {selected_id} status to False.")
-        check_response = client.execute_command("GET", "train", selected_id, "WITHFIELDS", "OBJECT")
-        logger.info(f"🔎 Post-update check for {selected_id}: {check_response}")
-        
-        try:
-            coords = train_obj["object"]["coordinates"]
-            if train_obj["object"]["type"] != "Point" or len(coords) < 2:
-                raise ValueError(f"Invalid train geometry for proximity search: {coords}")
-
-            lon, lat = coords[:2]
-            nearby_response = client.execute_command(
-                "NEARBY", "railsegment",
-                "POINT", float(lat), float(lon), 1000  # radius in meters
-            )
-
-            # The response format is [cursor, [[id1, dist1], [id2, dist2], ...]]
-            rail_ids = []
-            if isinstance(nearby_response, list) and len(nearby_response) > 1:
-                results = nearby_response[1]
-                for item in results:
-                    if isinstance(item, list) and len(item) >= 1:
-                        rail_id = item[0]
-                        if isinstance(rail_id, bytes):
-                            rail_id = rail_id.decode()
-                        rail_ids.append(rail_id)
-
-            logger.info(f"Found {len(rail_ids)} nearby railsegments within 1 km: {rail_ids}")
-
-            for rail_id in rail_ids:
-                # Get existing geometry
-                rail_get = client.execute_command("GET", "railsegment", rail_id, "WITHFIELDS", "OBJECT")
-                if rail_get is None or len(rail_get) < 2:
-                    logger.warning(f"Could not retrieve railsegment {rail_id}")
-                    continue
-
-                geometry_obj = json.loads(rail_get[0])
-                fields_data = {}
-                if len(rail_get[1]) >= 2:
-                    fields_data = {rail_get[1][0]: json.loads(rail_get[1][1])}
-
-                # Update status to false
-                if "info" in fields_data and isinstance(fields_data["info"], dict):
-                    fields_data["info"]["status"] = False
-                else:
-                    fields_data["info"] = {"status": False}
-
-                # Prepare and send SET command
-                field_args = []
-                for key, value in fields_data.items():
-                    field_args.extend(["FIELD", key, json.dumps(value)])
-
-                set_args = ["SET", "railsegment", rail_id] + field_args + ["OBJECT", json.dumps(geometry_obj)]
-                client.execute_command(*set_args)
-                logger.info(f"Updated railsegment {rail_id} status to False")
-
-        except Exception as e:
-            logger.error(f"❌ Failed to update nearby railsegments: {e}", exc_info=True)
-
-        incident = create_incident(client, selected_id, train_obj["object"], description="Train marked inactive due to incident")
-        
-        return incident  # Return incident dictionary
-
-
-
-    except Exception as e:
-        logger.error(f"Failed to update train {selected_id}: {e}", exc_info=True)
+        logger.error(f"Failed to simulate incident: {e}", exc_info=True)
         return None
 
 @app.websocket("/ws/scan")
