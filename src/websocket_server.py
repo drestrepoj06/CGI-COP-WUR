@@ -41,8 +41,11 @@ def fetch_entity_positions(collection: str):
                 if len(coords) < 2:
                     continue
 
-                timestamp = coords[2] if len(
-                    coords) > 2 else None  # Optional timestamp
+                timestamp = coords[2] if len(coords) > 2 else None
+
+                # Ensure availability_status is present
+                if "availability_status" not in info_obj:
+                    info_obj["availability_status"] = True
 
                 positions.append({
                     "lat": coords[1],
@@ -141,7 +144,7 @@ def create_incident(client, train_id, location, description="Incident reported",
 
     affected_passengers = affected_passengers_map[severity]
     ambulance_units = ambulance_units_map[severity]
-    technical_resources = "no"  # Always "no" in your case
+    technical_resources = "no"  # Always "no"
 
     if not isinstance(location, dict) or "type" not in location or "coordinates" not in location:
         logger.error(
@@ -233,11 +236,14 @@ def reset_all_trains(client):
 
 
 def mark_random_train_as_inactive(client):
+    """Mark a random train as inactive and create an incident record."""
     try:
+        # Scan all trains
         response = client.execute_command("SCAN", "train")
         cursor = response[0]
         items = response[1] if len(response) > 1 else []
 
+        # Extract train IDs
         train_ids = []
         for item in items:
             if isinstance(item, list) and len(item) > 0:
@@ -251,81 +257,61 @@ def mark_random_train_as_inactive(client):
                 elif isinstance(item, str):
                     train_ids.append(item)
 
-        logger.info(f"Found {len(train_ids)} trains: {train_ids}")
+        if not train_ids:
+            logger.error("No trains found to mark as inactive")
+            return False
 
-    except Exception as e:
-        logger.error(f"Error scanning trains: {e}", exc_info=True)
-        return False
+        # Select a random train
+        selected_id = random.choice(train_ids)
+        logger.info(f"Selected train {selected_id} for incident")
 
-    selected_id = random.choice(train_ids)  # Selected train: {selected_id}
+        # Get full train data
+        response = client.execute_command("GET", "train", selected_id, "WITHFIELDS", "OBJECT")
+        
+        if not response or not isinstance(response, list) or len(response) < 2:
+            raise ValueError(f"Invalid response for train {selected_id}: {response}")
 
-    try:
-        response = client.execute_command(
-            "GET", "train", selected_id, "WITHFIELDS", "OBJECT")
+        # Parse train data
+        geometry_obj = json.loads(response[0])
+        info_data = {}
+        
+        if len(response) >= 2 and len(response[1]) >= 2:
+            field_value_str = response[1][1]
+            info_data = json.loads(field_value_str)
 
-        if response is None:
-            raise ValueError(
-                f"GET command returned None for train ID {selected_id}")
+        # Get train type (default to "UNKNOWN" if not found)
+        train_type = info_data.get("type", "UNKNOWN")
 
-        if isinstance(response, list) and len(response) >= 2:
-            geometry_obj = json.loads(response[0])
+        # Update train status
+        info_data["status"] = False
+        info_data["frozen_coords"] = geometry_obj["coordinates"]
 
-            info_data = {}
-            if len(response[1]) >= 2:
-                field_key = response[1][0]  # 'info'
-                field_value_str = response[1][1]  # JSON string
-                info_data = json.loads(field_value_str)
+        # Save updated train data
+        client.execute_command(
+            "SET", "train", selected_id,
+            "FIELD", "info", json.dumps(info_data),
+            "OBJECT", json.dumps(geometry_obj)
+        )
 
-            info_data["status"] = False
-            info_data["frozen_coords"] = geometry_obj["coordinates"]
-
-            train_obj = {
-                "ok": True,
-                "object": geometry_obj,
-                "fields": {
-                    "info": info_data
-                }
-            }
-        else:
-            raise ValueError(f"Unexpected response format: {response}")
-
-    except Exception as e:
-        logger.error(
-            f"Failed to get object for train {selected_id}: {e}", exc_info=True)
-        return False
-
-    fields = train_obj["fields"]
-
-    if "info" in fields and isinstance(fields["info"], dict):
-        fields["info"]["status"] = False
-        fields["info"]["frozen_coords"] = train_obj["object"]["coordinates"]
-    else:
-        logger.warning(
-            f"Train {selected_id} does not have expected info structure")
-        return False
-
-    try:
-        geometry_json = json.dumps(train_obj["object"])
-        fields_args = []
-        for field_key, field_value in train_obj["fields"].items():
-            fields_args.extend(["FIELD", field_key, json.dumps(field_value)])
-
-        set_args = ["SET", "train", selected_id] + \
-            fields_args + ["OBJECT", geometry_json]
-        logger.info(f"SET command args: {set_args}")
-        client.execute_command(*set_args)
-
-        logger.info(f"Updated train {selected_id} status to False.")
-        check_response = client.execute_command(
-            "GET", "train", selected_id, "WITHFIELDS", "OBJECT")
-        logger.info(f"🔎 Post-update check for {selected_id}: {check_response}")
+        # Create incident with train type included
         incident = create_incident(
-            client, selected_id, train_obj["object"], description="Train marked inactive due to incident")
-        return incident  # Return incident dictionary
+            client,
+            selected_id,
+            geometry_obj,
+            description=f"Train {train_type} marked inactive"
+        )
+        
+        if not incident:
+            raise ValueError("Failed to create incident record")
+
+        # Add train type to incident data
+        incident["train_type"] = train_type
+        logger.info(f"Created incident for {selected_id} (Type: {train_type})")
+
+        return incident
 
     except Exception as e:
-        logger.error(
-            f"Failed to update train {selected_id}: {e}", exc_info=True)
+        logger.error(f"Failed to mark train as inactive: {e}", exc_info=True)
         return None
 
 
@@ -349,7 +335,7 @@ async def scan_websocket(websocket: WebSocket):
 
         while True:
             all_records = []
-            cursor = 0  # 初始游标
+            cursor = 0
 
             try:
                 # 🚀 **Loop through all pages of SCAN results**
