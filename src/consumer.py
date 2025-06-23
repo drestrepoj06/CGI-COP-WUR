@@ -37,7 +37,7 @@ def store_rail_segments():
 
         for feature in data["features"]:
             object_id = feature["id"]
-            # 直接存储整个 Polygon GeoJSON
+            # Polygon GeoJSON
             geojson_data = json.dumps(feature["geometry"])
             properties = feature["properties"]
 
@@ -45,7 +45,7 @@ def store_rail_segments():
                 "OBJECTID": properties.get("OBJECTID", object_id),
                 "SHAPE_Length": properties.get("SHAPE_Length", 0),
                 "SHAPE_Area": properties.get("SHAPE_Area", 0),
-                "status": True  # 额外字段
+                "status": True
             }
 
             # 存储到 Tile38
@@ -292,7 +292,8 @@ def main():
                         "accuracy": msg.get("accuracy"),
                         "type": msg.get("type"),
                         "source": msg.get("source"),
-                        "accident_location": None  # 可以在未来动态更新
+                        "accident_location": None,  # 可以在未来动态更新
+                        "availability_status": msg.get("availability_status", True)
                     }
 
                     # Step 2: 判断是否“冻结”（已分配救援任务）
