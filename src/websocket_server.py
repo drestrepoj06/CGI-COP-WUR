@@ -380,9 +380,10 @@ def mark_random_train_as_inactive(client):
                         rail_ids.append(rail_id)
 
             logger.info(f"Found {len(rail_ids)} nearby railsegments within 1 km: {rail_ids}")
+            affected_segments = [] 
 
             for rail_id in rail_ids:
-                # Get existing geometry
+    # Get existing geometry
                 rail_get = client.execute_command("GET", "railsegment", rail_id, "WITHFIELDS", "OBJECT")
                 if rail_get is None or len(rail_get) < 2:
                     logger.warning(f"Could not retrieve railsegment {rail_id}")
@@ -408,18 +409,32 @@ def mark_random_train_as_inactive(client):
                 client.execute_command(*set_args)
                 logger.info(f"Updated railsegment {rail_id} status to False")
 
+                # 🔴 Add to affected_segments
+                affected_segments.append({
+                    "type": "Feature",
+                    "geometry": geometry_obj,
+                    "properties": fields_data["info"]
+                })
+
+                
+
         except Exception as e:
             logger.error(f"❌ Failed to update nearby railsegments: {e}", exc_info=True)
 
         incident = create_incident(client, selected_id, train_obj["object"], description="Train marked inactive due to incident")
         
-        return incident  # Return incident dictionary
+        return {
+            "incident": incident,
+            "inactive_segments": affected_segments
+        }
+    
 
 
 
     except Exception as e:
         logger.error(f"Failed to update train {selected_id}: {e}", exc_info=True)
         return None
+
 
 @app.websocket("/ws/scan")
 async def scan_websocket(websocket: WebSocket):
