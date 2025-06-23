@@ -135,31 +135,27 @@ def stop_random_train():
         return False
 
 
-async def fetch_and_display_positions():
-    """
-    Fetch ambulance and broken train positions and display them in the dashboard.
-    """
-    positions = await fetch_ambu_broken_train_positions()
-    routes = await calculate_optimal_path(positions)
+# async def fetch_and_display_positions():
+#     """
+#     Fetch ambulance and broken train positions and display them in the dashboard.
+#     """
+#     positions = await fetch_ambu_broken_train_positions()
+#     routes = await calculate_optimal_path(positions)
 
-    # 确保 routes 不是 None 或者空字典
-    if not routes or not isinstance(routes, dict):
-        return [], None, None
+#     if not routes or not isinstance(routes, dict):
+#         return [], None, None
 
-    # 提取所需数据，并检查 key 是否存在
-    ambulance_id = routes.get("ambulance_id", None)
-    route_points = [(point["latitude"], point["longitude"])
-                    for point in routes.get("route_points", [])]
-    timestamp = routes.get("timestamp", None)
-    route_estimated_time = routes.get("route_estimated_time", None)
+#     ambulance_id = routes.get("ambulance_id", None)
+#     route_points = [(point["latitude"], point["longitude"])
+#                     for point in routes.get("route_points", [])]
+#     timestamp = routes.get("timestamp", None)
+#     route_estimated_time = routes.get("route_estimated_time", None)
 
-    # await record_ambulance_path(route_points, timestamp, route_estimated_time, ambulance_id)
+#     # await record_ambulance_path(route_points, timestamp, route_estimated_time, ambulance_id)
 
-    # # 显示 JSON 数据
-    # st.json(routes)
+#     # st.json(routes)
 
-    # 返回多个值（如果为空，则返回适当的空值）
-    return route_points, timestamp, route_estimated_time
+#     return route_points, timestamp, route_estimated_time
 
 
 # Main dashboard layout setup
@@ -184,7 +180,7 @@ async def main():
 
     # Middle column: animated map
     with col[1]:
-        route_points, timestamp, route_estimated_time = await fetch_and_display_positions()
+        # route_points, timestamp, route_estimated_time = await fetch_and_display_positions()
         incident_js = ""
         if st.session_state['button_states']['show_incident'] and st.session_state.get('incident_data'):
             coords = st.session_state['incident_data']["location"].get(
