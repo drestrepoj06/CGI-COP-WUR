@@ -439,7 +439,9 @@ def main():
                         # logging.info(f"latest_broken['object_id']: {latest_broken['object_id']}")
 
                         if latest_broken['object_id'] not in existing_object_ids:
-                            ambulance_positions = fetch_ambulance_positions()
+                            # ambulance_positions = fetch_ambulance_positions()
+                            spare_ambu_positions, busy_ambu_positions = fetch_ambulance_positions()
+                            
                             # {'id': '1', 'lat': 52.07583, 'lng': 5.03176}, {'id': '10', 'lat': 52.12133676463085, 'lng': 5.035003451829178}
 
                             # {"id": 1,"lat": coords[1], "lng": coords[0]}, {"id": 2,"lat": coords[1], "lng": coords[0]}
@@ -449,7 +451,7 @@ def main():
                                     "ambulance_id": ambu["id"],
                                     "route": get_route((ambu["lat"], ambu["lng"]), (latest_broken["lat"], latest_broken["lng"]))
                                 }
-                                for ambu in ambulance_positions
+                                for ambu in spare_ambu_positions
                             ]
 
                             best_route = min(
@@ -496,7 +498,7 @@ def main():
                                         for idx, pt in enumerate(route_points):
                                             # 转为毫秒级时间戳
                                             eta = int(start_timestamp +
-                                                      (idx * interval * 1500))
+                                                      (idx * interval * 800))
 
                                             # logging.info(pt["latitude"])
                                             # logging.info(pt["longitude"])
@@ -510,7 +512,7 @@ def main():
                                         "ambulance_id": best_route["ambulance_id"],
                                         "travel_time": travel_time,
                                         # "route_points": route_points,
-                                        "route_points_timed": timed_points  # ✅ 新增字段，包含时间信息
+                                        "route_points_timed": timed_points
                                     }
 
                                     tile38.execute_command(

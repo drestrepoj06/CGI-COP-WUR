@@ -8,41 +8,87 @@ logger = logging.getLogger("uvicorn")
 client = redis.Redis(host="tile38", port=9851, decode_responses=True)
 
 
+# def fetch_ambulance_positions():
+#     """
+#     Fetches ambulance location data and returns only ID and coordinates.
+
+#     Returns:
+#     - List[dict]: A list of dictionaries containing only ambulance ID and coordinates.
+#     """
+#     positions = []
+#     try:
+#         cursor, response = client.execute_command("SCAN", "ambulance")
+#         if not response or not isinstance(response, list) or len(response) < 2:
+#             logger.error(f"Ambulance data not found: {response}")
+#             return positions
+
+#         for obj in response:  # The actual object list
+#             logging.info(f"obj: {obj}")
+#             try:
+#                 ambu_info = json.loads(obj[2][1])  # Ambulance ID (序号)
+#                 ambu_id = ambu_info.get("vehicle_number", [])
+#                 geojson_obj = json.loads(obj[1])  # 解析为 JSON
+#                 coords = geojson_obj.get("coordinates", [])
+
+#                 if len(coords) < 2:
+#                     continue
+
+#                 positions.append({
+#                     "id": ambu_id,
+#                     "lat": coords[1],
+#                     "lng": coords[0]
+#                 })
+#             except Exception as e:
+#                 logger.error(f"Error parsing object {obj}: {e}")
+#     except Exception as e:
+#         logger.error(f"SCAN `ambulance` failed: {e}")
+
+#     return positions
+
+
 def fetch_ambulance_positions():
     """
-    Fetches ambulance location data and returns only ID and coordinates.
-
-    Returns:
-    - List[dict]: A list of dictionaries containing only ambulance ID and coordinates.
+    Fetches ambulance location data and returns two lists:
+    - spare_ambu_positions: ambulances with both availability_status and status as True
+    - busy_ambu_positions: all other ambulances
     """
-    positions = []
+    spare_ambu_positions = []
+    busy_ambu_positions = []
+
     try:
         cursor, response = client.execute_command("SCAN", "ambulance")
         if not response or not isinstance(response, list) or len(response) < 2:
             logger.error(f"Ambulance data not found: {response}")
-            return positions
+            return spare_ambu_positions, busy_ambu_positions
 
-        for obj in response:  # The actual object list
+        for obj in response:
+            # logging.info(f"obj: {obj}")
             try:
-                ambu_info = json.loads(obj[2][1])  # Ambulance ID (序号)
+                ambu_info = json.loads(obj[2][1])
                 ambu_id = ambu_info.get("vehicle_number", [])
-                geojson_obj = json.loads(obj[1])  # 解析为 JSON
+                geojson_obj = json.loads(obj[1])
                 coords = geojson_obj.get("coordinates", [])
 
                 if len(coords) < 2:
                     continue
 
-                positions.append({
+                ambu_data = {
                     "id": ambu_id,
                     "lat": coords[1],
                     "lng": coords[0]
-                })
+                }
+
+                if ambu_info.get("availability_status") is True and ambu_info.get("status") is True:
+                    spare_ambu_positions.append(ambu_data)
+                else:
+                    busy_ambu_positions.append(ambu_data)
+
             except Exception as e:
                 logger.error(f"Error parsing object {obj}: {e}")
     except Exception as e:
         logger.error(f"SCAN `ambulance` failed: {e}")
 
-    return positions
+    return spare_ambu_positions, busy_ambu_positions
 
 
 def fetch_broken_trains():
@@ -80,32 +126,34 @@ def fetch_broken_trains():
     return broken_trains
 
 
-async def fetch_ambu_broken_train_positions(websocket=None):
-    """
-    Fetches raw ambulance and broken train data without parsing.
+# async def fetch_ambu_broken_train_positions(websocket=None):
+#     """
+#     Fetches raw ambulance and broken train data without parsing.
 
-    Parameters:
-    - websocket (WebSocket, optional): If provided, sends the data via WebSocket.
+#     Parameters:
+#     - websocket (WebSocket, optional): If provided, sends the data via WebSocket.
 
-    Returns:
-    - dict: Raw JSON response from Redis.
-    """
-    response_data = {
-        "ambulance": fetch_ambulance_positions(),
-        "broken_trains": fetch_broken_trains(),
-    }
+#     Returns:
+#     - dict: Raw JSON response from Redis.
+#     """
+#     response_data = {
+#         "ambulance": fetch_ambulance_positions(),
+#         "broken_trains": fetch_broken_trains(),
+#     }
 
-    if websocket:
-        try:
-            await websocket.send_text(json.dumps(response_data))
-        except Exception as e:
-            logger.error(f"[ERROR] WebSocket transmission error: {e}")
-            await websocket.close()
+#     if websocket:
+#         try:
+#             await websocket.send_text(json.dumps(response_data))
+#         except Exception as e:
+#             logger.error(f"[ERROR] WebSocket transmission error: {e}")
+#             await websocket.close()
 
-    return response_data
+#     return response_data
 
-TOMTOM_API_KEY = "DJfZGAsAfoE8Nsb6KaOZ1UHXlU7z9sR5"
+TOMTOM_API_KEY = "fGPPGPPeZr5bWeBJke1HopjWnkFpk8En"
 # btm27pOSiKOd9tq5EHQvJdsdqj4X4q0C
+# DJfZGAsAfoE8Nsb6KaOZ1UHXlU7z9sR5
+
 
 def get_route(origin, destination):
     url = (

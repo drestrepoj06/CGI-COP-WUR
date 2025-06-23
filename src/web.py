@@ -8,7 +8,7 @@ import asyncio
 import json
 
 from websocket_server import mark_random_train_as_inactive, reset_all_trains
-from utils.navigate import fetch_ambu_broken_train_positions, calculate_optimal_path
+# from utils.navigate import fetch_ambu_broken_train_positions, calculate_optimal_path
 from utils.join_query import record_ambulance_path
 
 # Streamlit app setup
