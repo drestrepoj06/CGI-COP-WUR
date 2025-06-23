@@ -105,11 +105,10 @@ async def fetch_ambu_broken_train_positions(websocket=None):
     return response_data
 
 # TOMTOM_API_KEY = "qVEH8Wgf8a02QXAKbeGFxawLEALIefZJ"
-TOMTOM_API_KEY = "pwTdDMYr2KHUWTNE9vtvXppckxIhlnaK"
+TOMTOM_API_KEY = "YjyodVbTYnjdjl3JSUzoug3XwpQNuLYi"
 
 
 def get_route(origin, destination):
-    """获取救护车到指定目的地的路线点"""
     url = (
         f"https://api.tomtom.com/routing/1/calculateRoute/"
         f"{origin[0]},{origin[1]}:{destination[0]},{destination[1]}/json"
