@@ -1,14 +1,14 @@
 Currently working on:
-- [ ] 1a. Change 1km nearby railsegments FIELD 'status' from TRUE to FALSE lay them over real-time traffic density. (Mate or Jhon after 1e-f)
+- [x] 1a. Change 1km nearby railsegments FIELD 'status' from TRUE to FALSE lay them over real-time traffic density. (Mate or Jhon after 1e-f)
 - [ ] 1b. Send **GEOFENCING** on the segments that 'status' are FALSE. Send alert when other trains come across them.  (Mate or Jhon after 1e-f)
 - [x] 1c. Calculate estimated driving time from current ambu to this 'accident_location' based on Tomtom API. **Move code into the consumer** (Xiaolu)
 - [x] 1d. Fix bug with having to refresh the button (should be fixed by completing 1c). (Xiaolu)
-- [ ] **1c&d** comment: maybe still bug existing
+- [x] **1c&d** comment: maybe still bug existing
 - [x] 1e. Update severity field. (Jhon)
 - [x] 1f. Create a pop-up at the stopped train upon pressing the button/update incident information window. (Jhon)
 - [x] 1g1. Fix bug with trains stopping at the border of the study area. (Thijs)
 - [ ] 1g2. Only allow trains within area to be stopped by the button. (Thijs)
-- [ ] 1h. Add more simulated ambulances. (Falco)
+- [x] 1h. Add more simulated ambulances. (Falco)
 ---
 
 Requirements:  
