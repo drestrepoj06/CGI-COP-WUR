@@ -342,18 +342,11 @@ def main():
                         else:
                             tile38.execute_command("SET", collection, object_id, "FIELD", "info", json.dumps(
                                 fields), "POINT", lat, lng, timestamp_ms)
-                    # else:
-                    #     tile38.execute_command(
-                    #         "SET", collection, object_id,
-                    #         "FIELD", "info", json.dumps(fields),
-                    #         "POINT", lat, lng, timestamp_ms
-                    #     )
                 elif collection == "ambulance":
                     if fields.get("status") is False:
                         matched_coord = None
                         min_time_diff = float("inf")
 
-                        # 查找当前 ambulance_id 是否存在于已有路径对象中
                         for obj in ambu_related_objects:
                             if obj["ambulance_id"] == vehicle_number:
                                 for pt in obj.get("route_points_timed", []):
@@ -442,9 +435,8 @@ def main():
                             if int(cursor) == 0:
                                 break
 
-                        # 输出所有提取的 object_id
-                        logging.info(f"existing_object_ids: {existing_object_ids}")
-                        logging.info(f"latest_broken['object_id']: {latest_broken['object_id']}")
+                        # logging.info(f"existing_object_ids: {existing_object_ids}")
+                        # logging.info(f"latest_broken['object_id']: {latest_broken['object_id']}")
 
                         if latest_broken['object_id'] not in existing_object_ids:
                             ambulance_positions = fetch_ambulance_positions()
@@ -504,7 +496,7 @@ def main():
                                         for idx, pt in enumerate(route_points):
                                             # 转为毫秒级时间戳
                                             eta = int(start_timestamp +
-                                                      (idx * interval * 10000))
+                                                      (idx * interval * 1500))
 
                                             # logging.info(pt["latitude"])
                                             # logging.info(pt["longitude"])

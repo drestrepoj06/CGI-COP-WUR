@@ -104,8 +104,8 @@ async def fetch_ambu_broken_train_positions(websocket=None):
 
     return response_data
 
-TOMTOM_API_KEY = "btm27pOSiKOd9tq5EHQvJdsdqj4X4q0C"
-
+TOMTOM_API_KEY = "DJfZGAsAfoE8Nsb6KaOZ1UHXlU7z9sR5"
+# btm27pOSiKOd9tq5EHQvJdsdqj4X4q0C
 
 def get_route(origin, destination):
     url = (
