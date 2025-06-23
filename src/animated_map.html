@@ -51,18 +51,18 @@
 
             // Render ambulance stations
             L.geoJSON(ambulanceStationsData, {
-                pointToLayer: function (feature, latlng) {
-                    return L.rectangle([
-                        [latlng.lat - 0.001, latlng.lng - 0.003],
-                        [latlng.lat + 0.001, latlng.lng + 0.003]
-                    ], {
-                        color: 'yellow',
-                        weight: 1,
-                        fillColor: 'yellow',
-                        fillOpacity: 1
-                    });
-                }
-            }).addTo(map);
+            pointToLayer: function (feature, latlng) {
+                const ambStationIcon = L.icon({
+                iconUrl: 'https://raw.githubusercontent.com/drestrepoj06/CGI-COP-WUR/refs/heads/main/src/vec/amb_station.png',
+                iconSize: [37, 37],
+                iconAnchor: [16, 16],
+                popupAnchor: [0, -16]
+                });
+
+                return L.marker(latlng, { icon: ambStationIcon })
+                .bindPopup(`🏥 ${feature.properties.StationName}`);
+                        }
+                    }).addTo(map);
 
             // Render rails
             L.geoJSON(railsData, {
@@ -116,7 +116,8 @@
                     } catch (e) {
                         info = {};
                     }
-
+                    
+                    const trainType = info.type || "DEFAULT"; // e.g., IC, SPR, or fallback
                     const isStopped = info.status === false;
 
                     // Remove marker and skip if outside area
@@ -128,25 +129,32 @@
                         return;
                     }
 
-                    // Remove and skip if train is stopped
-                    if (isStopped) {
-                        if (trainMarkers[id]) {
-                            map.removeLayer(trainMarkers[id]);
-                            delete trainMarkers[id];
-                        }
+                    if (isStopped && !trainMarkers[id]) {
+                        // Skip showing stopped trains that are not on the map
                         return;
                     }
 
                     // Active train: continue
                     const latlng = [coordinates[1], coordinates[0]];
 
-                    const popupContent = `🚆 Train ${id}<br/>⏰ ${formatTimestamp(timestamp)}<br/>Status: Active`;
+                    const popupContent = `🚆 Train ${id}<br/>
+                            ⏰ ${formatTimestamp(timestamp)}<br/>
+                            Type: ${trainType}<br/>
+                            Status: ${isStopped ? 'Stopped' : 'Active'}`;
+
+                    // Choose icon based on train type and status
+                    let iconUrl = '';
+                    if (trainType === 'SPR') {        
+                    iconUrl = 'https://raw.githubusercontent.com/drestrepoj06/CGI-COP-WUR/refs/heads/main/src/vec/SPR.png';
+                    } else {
+                    iconUrl = 'https://raw.githubusercontent.com/drestrepoj06/CGI-COP-WUR/refs/heads/main/src/vec/IC.png';
+                    }
 
                     const trainIcon = L.icon({
-                        iconUrl: 'https://raw.githubusercontent.com/drestrepoj06/CGI-COP-WUR/CRUD/src/vec/icngb25.png',
-                        iconSize: [32, 32],
-                        iconAnchor: [16, 16],
-                        popupAnchor: [0, -16]
+                    iconUrl: iconUrl,
+                    iconSize: [32, 32],
+                    iconAnchor: [16, 16],
+                    popupAnchor: [0, -16]
                     });
 
                     if (!trainMarkers[id]) {
@@ -186,139 +194,134 @@
         }
         let incidentMarker = null;
 
-        function showIncidentPopup(lat, lng, trainId, severity, description) {
-            // Update existing marker if trainId is found
+        function showIncidentPopup(lat, lng, trainId, trainType, severity, description) {
+            // Close any existing incident popup
+            if (incidentMarker) {
+                map.removeLayer(incidentMarker);
+            }
+
+            // Create custom icon based on train type
+            const iconUrl = trainType === 'IC' ? 
+                'https://raw.githubusercontent.com/drestrepoj06/CGI-COP-WUR/main/src/vec/IC_stopped.png' :
+                'https://raw.githubusercontent.com/drestrepoj06/CGI-COP-WUR/main/src/vec/SPR_stopped.png';
+            
+            const icon = L.icon({
+                iconUrl: iconUrl,
+                iconSize: [40, 40],
+                iconAnchor: [20, 20],
+                popupAnchor: [0, -20]
+            });
+
+            // Create popup content with train type
+            const popupContent = `
+                <b>🚨 Train Incident</b><br>
+                <b>Train ID:</b> ${trainId}<br>
+                <b>Severity:</b> ${severity}<br>
+                <b>Description:</b> ${description}
+            `;
+
+            // Create and bind popup
+            incidentMarker = L.marker([lat, lng], { icon: icon })
+                .addTo(map)
+                .bindPopup(popupContent)
+                .openPopup();
+
+            // Center map on incident
+            map.setView([lat, lng], 15, { animate: true });
+
+            // If train marker exists, highlight it
             if (trainMarkers[trainId]) {
-                const popupContent = `
-            <b>🚨 Train Incident</b><br>
-            <b>Train ID:</b> ${trainId}<br>
-            <b>Severity:</b> ${severity}<br>
-            <b>Description:</b> ${description}
-        `;
+                trainMarkers[trainId].setIcon(icon);
                 trainMarkers[trainId].bindPopup(popupContent).openPopup();
-                map.setView([lat, lng], 15, { animate: true });
-            } else {
-                // Fallback: if marker not found, create a temporary incident marker
-                if (incidentMarker) {
-                    map.removeLayer(incidentMarker);
-                }
-
-                const icon = L.icon({
-                    iconUrl: 'https://raw.githubusercontent.com/drestrepoj06/CGI-COP-WUR/CRUD/src/vec/icngb25_stopped.png',
-                    iconSize: [40, 40],
-                    iconAnchor: [20, 40],
-                    popupAnchor: [0, -30]
-                });
-
-                const popupContent = `
-            <b>🚨 Train Incident</b><br>
-            <b>Train ID:</b> ${trainId}<br>
-            <b>Severity:</b> ${severity}<br>
-            <b>Description:</b> ${description}
-        `;
-
-                incidentMarker = L.marker([lat, lng], { icon: icon })
-                    .addTo(map)
-                    .bindPopup(popupContent)
-                    .openPopup();
-
-                map.setView([lat, lng], 15, { animate: true });
             }
         }
 
         function updateAmbulancePositions(ambulances, ambuPath) {
-            let ambuPathData = {}; // 存储路径数据
+            let ambuPathData = {};
 
-            // 处理 ambuPath 数据
             ambuPath.forEach(amP => {
-                try {
-                    const [amP_id, amP_timestamp] = amP[0].split("_");
-                    const amP_geojson = JSON.parse(amP[1]);
-                    const [amP_lng, amP_lat] = amP_geojson.coordinates; // 提取坐标 (lng, lat)
+            try {
+                const [amP_id, amP_timestamp] = amP[0].split("_");
+                const amP_geojson = JSON.parse(amP[1]);
+                const [amP_lng, amP_lat] = amP_geojson.coordinates;
 
-                    // 以 amP_id 为第一级，amP_timestamp 为第二级
-                    if (!ambuPathData[amP_id]) {
-                        ambuPathData[amP_id] = {};
-                    }
-                    ambuPathData[amP_id][amP_timestamp] = { lng: amP_lng, lat: amP_lat };
-                } catch (error) {
-                    console.error("🚨 Error parsing Ambu Path:", amP, error);
+                if (!ambuPathData[amP_id]) {
+                ambuPathData[amP_id] = {};
                 }
+                ambuPathData[amP_id][amP_timestamp] = { lng: amP_lng, lat: amP_lat };
+            } catch (error) {
+                console.error("🚨 Error parsing Ambu Path:", amP, error);
+            }
             });
 
-            // **更新救护车位置**
             ambulances.forEach(amb => {
-                try {
-                    const id = amb[0]; // 获取救护车 ID
-                    const geojson = JSON.parse(amb[1]); // 解析 GeoJSON 字符串
-                    const coordinates = geojson.coordinates; // 获取坐标 (lng, lat)
-                    const timestamp = Number(amb[1].slice(-15, -2)); // 解析时间戳
+            try {
+                const id = amb[0];
+                const geojson = JSON.parse(amb[1]);
+                const coordinates = geojson.coordinates;
+                const timestamp = Number(amb[1].slice(-15, -2));
+                let latlng = [coordinates[1], coordinates[0]];
 
-                    let latlng = [coordinates[1], coordinates[0]];
+                if (ambuPathData[id]) {
+                const timestamps = Object.keys(ambuPathData[id]).map(Number).sort((a, b) => a - b);
+                let closestTimestamp = timestamps[0];
 
-                    // **如果存在对应的路径数据，则替换坐标**
-                    if (ambuPathData[id]) {
-                        const timestamps = Object.keys(ambuPathData[id]).map(Number).sort((a, b) => a - b);
-                        let closestTimestamp = timestamps[0];
-
-                        for (const t of timestamps) {
-                            if (t <= timestamp) {
-                                closestTimestamp = t;
-                            } else {
-                                break;
-                            }
-                        }
-
-                        if (timestamp > timestamps[timestamps.length - 1]) {
-                            closestTimestamp = timestamps[timestamps.length - 1];
-                        }
-
-                        const pathCoords = ambuPathData[id][closestTimestamp];
-                        latlng = [pathCoords.lat, pathCoords.lng];
-                        console.log(`IF 🚑 LatLng: (${latlng[0]}, ${latlng[1]}), closestTimestamp: ${closestTimestamp}, ID: ${id}`);
-
-                    }
-                    console.log(`🚑 LatLng: (${latlng[0]}, ${latlng[1]}), Timestamp: ${timestamp}, ID: ${id}`);
-
-                    const popupContent = `🚑 Ambulance ${id}<br/>⏰ ${formatTimestamp(timestamp)}`;
-
-
-                    const ambulanceIcon = L.icon({
-                        iconUrl: 'https://raw.githubusercontent.com/drestrepoj06/CGI-COP-WUR/CRUD/src/vec/ambulance-100.png',  // 替换为实际救护车图标的路径
-                        iconSize: [32, 32], // 图标大小
-                        iconAnchor: [16, 16], // 图标中心点
-                        popupAnchor: [0, -16] // 弹出框偏移量
-                    });
-
-                    // **强制更新救护车位置**
-                    if (!ambulanceMarkers[id]) {
-                        ambulanceMarkers[id] = L.marker(latlng, { icon: ambulanceIcon })
-                            .addTo(map)
-                            .bindPopup(popupContent);
-                        // ambulanceMarkers[id] = L.circleMarker(latlng, {
-                        //     radius: 6,
-                        //     color: "red",
-                        //     fillColor: "red",
-                        //     fillOpacity: 0.4
-                        // }).addTo(map).bindPopup(popupContent);
+                for (const t of timestamps) {
+                    if (t <= timestamp) {
+                    closestTimestamp = t;
                     } else {
-                        ambulanceMarkers[id].setLatLng(latlng); // **更新位置**
-                        if (ambulanceMarkers[id].isPopupOpen()) {
-                            ambulanceMarkers[id].getPopup().setContent(popupContent);
-                        }
+                    break;
                     }
-                } catch (error) {
-                    console.error("🚨 Error parsing ambulance data:", amb, error);
                 }
+
+                if (timestamp > timestamps[timestamps.length - 1]) {
+                    closestTimestamp = timestamps[timestamps.length - 1];
+                }
+
+                const pathCoords = ambuPathData[id][closestTimestamp];
+                latlng = [pathCoords.lat, pathCoords.lng];
+                }
+
+                let info = {};
+                try {
+                info = JSON.parse(amb[2][1]);
+                } catch (e) {
+                console.error("Error parsing ambulance info:", e);
+                }
+
+                const isAvailable = info.availability_status === true;
+                const iconUrl = isAvailable
+                ? 'https://raw.githubusercontent.com/drestrepoj06/CGI-COP-WUR/main/src/vec/ambulance_available.png'
+                : 'https://raw.githubusercontent.com/drestrepoj06/CGI-COP-WUR/main/src/vec/ambulance_unavailable.png';
+
+                const ambulanceIcon = L.icon({
+                iconUrl: iconUrl,
+                iconSize: [26, 26],
+                iconAnchor: [10, 10],
+                popupAnchor: [0, -16]
+                });
+
+                const statusText = isAvailable ? 'Available' : 'Unavailable';
+                const popupContent = `🚑 Ambulance ${id}<br/>⏰ ${formatTimestamp(timestamp)}<br/>Status: ${statusText}`;
+
+                if (!ambulanceMarkers[id]) {
+                ambulanceMarkers[id] = L.marker(latlng, { icon: ambulanceIcon })
+                    .addTo(map)
+                    .bindPopup(popupContent);
+                } else {
+                ambulanceMarkers[id].setLatLng(latlng);
+                ambulanceMarkers[id].setIcon(ambulanceIcon);
+                if (ambulanceMarkers[id].isPopupOpen()) {
+                    ambulanceMarkers[id].getPopup().setContent(popupContent);
+                }
+                }
+            } catch (error) {
+                console.error("🚨 Error parsing ambulance data:", amb, error);
+            }
             });
 
-            // **强制刷新地图**
             map.invalidateSize();
-
         }
-
-
-
 
         function initAmbulanceWebSocket() {
             const ambulanceSocket = new WebSocket("ws://localhost:8000/ws/scan");
