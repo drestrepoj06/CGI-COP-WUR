@@ -200,7 +200,8 @@ def produce_ambulance_messages():
                     "heading": amb.get("heading"),
                     "accuracy": amb.get("accuracy_m"),
                     "type": amb.get("type"),
-                    "source": amb.get("source")
+                    "source": amb.get("source"),
+                    "availability_status": amb.get("availability_status", True)
                 }
                 timestamp_groups[timestamp].append(message)
 
