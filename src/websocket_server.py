@@ -136,10 +136,10 @@ def create_incident(client, train_id, location, description="Incident reported",
         "critical": 12
     }
     ambulance_units_map = {
-        "low": 2,
+        "low": 1,
         "moderate": 2,
-        "high": 5,
-        "critical": 10
+        "high": 3,
+        "critical": 5
     }
 
     affected_passengers = affected_passengers_map[severity]
