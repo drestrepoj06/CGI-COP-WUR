@@ -7,15 +7,15 @@ Currently working on:
 - [x] 1e. Update severity field. (Jhon)
 - [x] 1f. Create a pop-up at the stopped train upon pressing the button/update incident information window. (Jhon)
 - [x] 1g1. Fix bug with trains stopping at the border of the study area. (Thijs)
-- [ ] 1g2. Only allow trains within area to be stopped by the button. (Thijs)
+- [x] 1g2. Only allow trains within area to be stopped by the button. (Thijs)
 - [x] 1h. Add more simulated ambulances. (Falco)
 ---
 
 Requirements:  
-- [ ] 2a. Set realistic speed when an ambulance is driving towards incident location.
+- [x] 2a. Set realistic speed when an ambulance is driving towards incident location.
 - [ ] 2b. Estimated Time of Arrival of ambulance to incident location.(Xiaolu)
-- [ ] 2c. Create button to request and send the ambus.
-- [ ] 2d. Reset all ambulances when reset trains.
+- [x] 2c. Create button to request and send the ambus.
+- [x] 2d. Reset all ambulances when reset trains.
 
 ---
 Other tasks:
