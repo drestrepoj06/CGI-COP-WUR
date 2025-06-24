@@ -165,7 +165,7 @@ def produce_train_messages():
                 #     logging.info(f"🚧 Geofence set for stopped train {train['ritId']} at ({train['lat']}, {train['lng']})")
 
             producer.flush()
-            time.sleep(5)
+            time.sleep(5.6)
 
     except Exception as e:
         logging.error(f"🚨 Train producer error: {e}")
@@ -212,7 +212,7 @@ def produce_ambulance_messages():
                 producer.send('ambulance-locations', value=message)
             producer.flush()
             # logging.info(f"✅ Ambulance data batch for timestamp {timestamp} sent.")
-            time.sleep(2)  # Optional delay between batches
+            time.sleep(1.1)  # Optional delay between batches
 
     except Exception as e:
         logging.error(f"🚨 Ambulance producer error: {e}")

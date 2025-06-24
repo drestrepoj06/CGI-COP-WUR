@@ -12,3 +12,4 @@ fastapi
 uvicorn
 plotly
 geopy
+streamlit_autorefresh
