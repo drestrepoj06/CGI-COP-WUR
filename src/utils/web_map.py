@@ -1,6 +1,7 @@
 import streamlit as st
 import json
 from utils.web_map_loader import load_map_html, generate_incident_js
+import logging
 
 
 def render_map_section(ambulance_data):
