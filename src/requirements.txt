@@ -12,4 +12,4 @@ fastapi
 uvicorn
 plotly
 geopy
-streamlit_autorefresh
+shapely>=2.0.0
