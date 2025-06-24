@@ -25,6 +25,107 @@ tile38 = redis.Redis(host=TILE38_HOST, port=TILE38_PORT, decode_responses=True)
 RAIL_SEGMENTS_JSON_FILE_PATH = "utils/UtrechtRailsSegments.geojson"
 
 
+def process_broken_trains_and_assign_ambulances():
+    latest_broken = None
+    latest_timestamp = -1
+
+    try:
+        cursor, response = tile38.execute_command("SCAN", "broken_train")
+        if response and isinstance(response, list):
+            for obj in response:
+                try:
+                    additional_info = response[0][2] if len(
+                        response[0]) > 2 else []
+                    info_dict = dict(
+                        zip(additional_info[::2], additional_info[1::2]))
+                    ambulance_count = int(
+                        info_dict.get("ambulance_units", "1"))
+                except Exception as e:
+                    logging.warning(
+                        f"Unable to extract ambulance_units, defaulting to 1: {e}")
+                    ambulance_count = 1
+
+                try:
+                    object_id = obj[0].split("_")[1]  # train_id
+                    geojson_obj = json.loads(obj[1])
+                    coords = geojson_obj.get("coordinates", [])
+                    timestamp = coords[2]
+                    if timestamp > latest_timestamp:
+                        latest_timestamp = timestamp
+                        latest_broken = {
+                            "object_id": object_id,
+                            "geojson": geojson_obj,
+                            "lat": coords[1],
+                            "lng": coords[0],
+                            "timestamp": timestamp
+                        }
+                except Exception as e:
+                    logging.warning(
+                        f"Failed to parse broken_train obj {obj}: {e}")
+
+            if latest_broken:
+                cursor = 0
+                existing_object_ids = []
+                while True:
+                    cursor, result = tile38.execute_command(
+                        "SCAN", "ambu_path2train", "MATCH", "*_ambu_*")
+                    objects = result if isinstance(result, list) else []
+                    for obj in objects:
+                        key = obj[0] if isinstance(
+                            obj, list) else obj.get("id", "")
+                        if "_ambu_" in key:
+                            existing_object_id = key.split("_ambu_")[0]
+                            existing_object_ids.append(existing_object_id)
+                    if int(cursor) == 0:
+                        break
+
+                if latest_broken['object_id'] not in existing_object_ids:
+                    spare_ambu_positions, busy_ambu_positions = fetch_ambulance_positions()
+                    ambu_routes = [
+                        {
+                            "ambulance_id": ambu["id"],
+                            "route": get_route((ambu["lat"], ambu["lng"]), (latest_broken["lat"], latest_broken["lng"]))
+                        }
+                        for ambu in spare_ambu_positions
+                    ]
+                    ambu_routes_sorted = sorted(
+                        ambu_routes,
+                        key=lambda x: x["route"]["routes"][0]["legs"][0]["summary"]["travelTimeInSeconds"]
+                    )
+                    selected_routes = ambu_routes_sorted[:ambulance_count]
+
+                    for route_info in selected_routes:
+                        ambulance_id = route_info["ambulance_id"]
+                        route_data = route_info["route"]
+                        if not isinstance(route_data, dict):
+                            logging.error(
+                                f"Route data is not dict for ambulance {ambulance_id}")
+                            continue
+                        leg = route_data["routes"][0]["legs"][0]
+                        route_points = leg["points"]
+                        travel_time = leg["summary"]["travelTimeInSeconds"]
+                        start_timestamp = latest_broken["timestamp"]
+                        timed_points = build_timed_route_points(
+                            route_points, start_timestamp, travel_time)
+                        ambu_path_fields = {
+                            "ambulance_id": ambulance_id,
+                            "travel_time": travel_time,
+                            "route_points_timed": timed_points
+                        }
+                        ambu_path_key = f"{latest_broken['object_id']}_ambu_{ambulance_id}"
+                        existing = tile38.execute_command(
+                            "GET", "ambu_path2train", ambu_path_key)
+                        if not existing:
+                            tile38.execute_command(
+                                "SET", "ambu_path2train", ambu_path_key,
+                                "FIELD", "info", json.dumps(ambu_path_fields),
+                                "OBJECT", json.dumps(latest_broken["geojson"])
+                            )
+    except Exception as e:
+        logging.error(
+            f"🚨 Error while scanning and processing broken_train data: {e}")
+
+
 def store_rail_segments():
     """Load JSON file and store rail segments into Tile38 as Polygon GeoJSON."""
     try:
@@ -251,59 +352,46 @@ def build_timed_route_points(route_points, start_timestamp, travel_time):
         {
             "latitude": pt["latitude"],
             "longitude": pt["longitude"],
-            "timestamp": int(start_timestamp + idx * interval * 400)  # 1s = 1,000ms 
+            # 1s == 1,000 ms but we want 1s == 400 ms
+            "timestamp": int(start_timestamp + idx * interval * 400)
         }
         for idx, pt in enumerate(route_points)
     ]
     return timed_points
 
 
+# def process_kafka_messages():
+
 def main():
     store_rail_segments()
 
-    consumer = create_kafka_consumer()
+    # process_kafka_messages()
 
     try:
+        consumer = create_kafka_consumer()
         for message in consumer:
             topic = message.topic
             msg = message.value
-
             collection = topic.split('-')[0]  # 'train' or 'ambulance'
-
             try:
                 lat = float(msg["lat"])
                 lng = float(msg["lng"])
-                timestamp_ms = float(msg["timestamp"])  # e.g., 1749632389587
-
+                timestamp_ms = float(msg["timestamp"])
                 fields = {}
-
                 if topic == "train-locations":
                     object_id = msg.get("ritId", f"train_{int(timestamp_ms)}")
                     fields["type"] = msg.get("type")
                     fields["speed"] = msg.get("speed")
                     fields["direction"] = msg.get("direction")
                     fields["status"] = True
-                    fields["is_within_area"] = is_within_visible_radius(
-                        lat, lng)  # New visibility flag
+                    fields["is_within_area"] = is_within_visible_radius(lat, lng)
                     fields["accident_location"] = None
-
-                elif topic == "ambulance-locations":  # ambulance-locations
-                    # 提前获取已有的救护车路径对象关联的 vehicle_number 列表
-                    # 提前获取已分配任务的救护车 ID 列表（如有）
+                elif topic == "ambulance-locations":
                     ambu_related_objects = get_busy_object_ids_from_ambu_path()
-                    ambu_related_ids = [
-                        obj["ambulance_id"] for obj in ambu_related_objects] if ambu_related_objects else []
-
-                    # 当前消息中的救护车 ID 和对象 ID
+                    ambu_related_ids = [obj["ambulance_id"]
+                                        for obj in ambu_related_objects] if ambu_related_objects else []
                     vehicle_number = msg.get("vehicle_number")
                     object_id = vehicle_number if vehicle_number else f"ambulance_{int(timestamp_ms)}"
-
-                    # logging.info("ambu object_id: ")
-                    # logging.info(object_id)
-                    # logging.info("ambu_related_ids: ")
-                    # logging.info(ambu_related_ids)
-
-                    # Step 1: 先构建常规字段
                     fields = {
                         "vehicle_number": vehicle_number,
                         "speed": msg.get("speed"),
@@ -311,39 +399,26 @@ def main():
                         "accuracy": msg.get("accuracy"),
                         "type": msg.get("type"),
                         "source": msg.get("source"),
-                        "accident_location": None,  # 可以在未来动态更新
+                        "accident_location": None,
                         "availability_status": msg.get("availability_status", True)
                     }
-
-                    # Step 2: 判断是否“冻结”（已分配救援任务）
                     if vehicle_number in ambu_related_ids:
-                        # logging.info("vehicle_numer already in ambu_related_ids")
-                        fields["status"] = False  # 冻结
+                        fields["status"] = False
                     else:
                         fields["status"] = True
 
-                    # logging.info("ambu status: ")
-                    # logging.info(fields["status"])
-
-                # Initialize existing_fields and update logic
                 existing_fields = {}
                 skip_update = False
-
                 try:
                     existing = tile38.execute_command(
                         "GET", collection, object_id, "WITHFIELDS", "OBJECT")
                     if existing and isinstance(existing, list) and len(existing) >= 2:
                         existing_obj = json.loads(existing[0])
-                        existing_fields = json.loads(
-                            existing[1][1])  # ['info', '{...}']
-
-                        # Check if the object is frozen
+                        existing_fields = json.loads(existing[1][1])
                         if existing_fields.get("status") is False:
                             skip_update = True
-                            # logging.info(f"🚫 Skipping update for frozen {collection} {object_id}")
                         elif "frozen_coords" in existing_fields:
                             fields["frozen_coords"] = existing_fields["frozen_coords"]
-
                 except Exception as e:
                     logging.warning(
                         f"⚠️ Could not fetch existing data for {collection}/{object_id}: {e}")
@@ -361,16 +436,15 @@ def main():
                         else:
                             tile38.execute_command("SET", collection, object_id, "FIELD", "info", json.dumps(
                                 fields), "POINT", lat, lng, timestamp_ms)
+
                 elif collection == "ambulance":
                     if fields.get("status") is False:
                         matched_coord = None
                         min_time_diff = float("inf")
-
                         for obj in ambu_related_objects:
                             if obj["ambulance_id"] == vehicle_number:
                                 for pt in obj.get("route_points_timed", []):
-                                    t_diff = abs(
-                                        pt["timestamp"] - timestamp_ms)
+                                    t_diff = abs(pt["timestamp"] - timestamp_ms)
                                     if t_diff < min_time_diff:
                                         min_time_diff = t_diff
                                         matched_coord = [
@@ -387,231 +461,13 @@ def main():
                             logging.warning(
                                 f"⚠️ No matched coordinates found for {vehicle_number}, skipping POINT update.")
                     else:
-                        # logging.info(
-                        #     f"update ambu-{object_id} <- consumer {lat} {lng} since not false status {timestamp_ms}")
                         tile38.execute_command(
                             "SET", collection, object_id,
                             "FIELD", "info", json.dumps(fields),
                             "POINT", lat, lng, timestamp_ms
                         )
-
-                latest_broken = None
-                latest_timestamp = -1
-
-                ##############
-
-                try:
-                    cursor, response = tile38.execute_command(
-                        "SCAN", "broken_train")
-
-                    # logging.info(f"response: {response}")
-                    if response and isinstance(response, list):
-                        for obj in response:
-                            try:
-                                # 获取 ambulance_units 数
-                                additional_info = response[0][2] if len(
-                                    response[0]) > 2 else []
-                                info_dict = dict(
-                                    zip(additional_info[::2], additional_info[1::2]))
-                                ambulance_count = int(
-                                    info_dict.get("ambulance_units", "1"))
-                            except Exception as e:
-                                logging.warning(
-                                    f"Unable to extract ambulance_units, defaulting to 1: {e}")
-                                ambulance_count = 1
-
-                            try:
-
-                                object_id = obj[0].split("_")[1]  # train_id
-                                # {"type":"Point","coordinates":[5.1060586,52.093464,1750411271244]}
-                                geojson_obj = json.loads(obj[1])
-
-                                # logging.info(f"🕵️ geojson_obj = {geojson_obj} (type: {type(geojson_obj)})")
-
-                                # [5.1060586,52.093464,1750411271244]
-                                coords = geojson_obj.get("coordinates", [])
-
-                                timestamp = coords[2]  # 1750411271244
-                                if timestamp > latest_timestamp:
-                                    latest_timestamp = timestamp
-                                    latest_broken = {
-                                        "object_id": object_id,
-                                        "geojson": geojson_obj,
-                                        "lat": coords[1],
-                                        "lng": coords[0],
-                                        "timestamp": timestamp
-                                    }
-                            except Exception as e:
-                                logging.warning(
-                                    f"Failed to parse broken_train obj {obj}: {e}")
-
-                            if latest_broken:  # only execute this after create incident
-                                # logging.info(f"🚨 Latest incident: {latest_broken['object_id']} at {latest_broken['timestamp']}")
-
-                                cursor = 0
-                                existing_object_ids = []
-
-                                while True:
-                                    cursor, result = tile38.execute_command(
-                                        "SCAN", "ambu_path2train", "MATCH", "*_ambu_*")
-                                    objects = result if isinstance(
-                                        result, list) else []
-
-                                    for obj in objects:
-                                        key = obj[0] if isinstance(
-                                            obj, list) else obj.get("id", "")
-                                        if "_ambu_" in key:
-                                            existing_object_id = key.split("_ambu_")[
-                                                0]
-                                            existing_object_ids.append(
-                                                existing_object_id)
-
-                                    if int(cursor) == 0:
-                                        break
-
-                                # logging.info(f"existing_object_ids: {existing_object_ids}")
-                                # logging.info(f"latest_broken['object_id']: {latest_broken['object_id']}")
-
-                                if latest_broken['object_id'] not in existing_object_ids:
-                                    # ambulance_positions = fetch_ambulance_positions()
-                                    spare_ambu_positions, busy_ambu_positions = fetch_ambulance_positions()
-
-                                    # {'id': '1', 'lat': 52.07583, 'lng': 5.03176}, {'id': '10', 'lat': 52.12133676463085, 'lng': 5.035003451829178}
-
-                                    # {"id": 1,"lat": coords[1], "lng": coords[0]}, {"id": 2,"lat": coords[1], "lng": coords[0]}
-
-                                    ambu_routes = [
-                                        {
-                                            "ambulance_id": ambu["id"],
-                                            "route": get_route((ambu["lat"], ambu["lng"]), (latest_broken["lat"], latest_broken["lng"]))
-                                        }
-                                        for ambu in spare_ambu_positions
-                                    ]
-
-                                    # best_route = min(
-                                    #     ambu_routes,
-                                    #     key=lambda x: x["route"]["routes"][0]["legs"][0]["summary"]["travelTimeInSeconds"]
-                                    # )
-                                    # route_data = best_route.get("route")
-
-                                    ambu_routes_sorted = sorted(
-                                        ambu_routes,
-                                        key=lambda x: x["route"]["routes"][0]["legs"][0]["summary"]["travelTimeInSeconds"]
-                                    )
-
-                                    selected_routes = ambu_routes_sorted[:ambulance_count]
-
-                                    for route_info in selected_routes:
-                                        ambulance_id = route_info["ambulance_id"]
-                                        route_data = route_info["route"]
-
-                                        if not isinstance(route_data, dict):
-                                            logging.error(f"Route data is not dict for ambulance {ambulance_id}")
-                                            continue
-
-                                        leg = route_data["routes"][0]["legs"][0]
-                                        route_points = leg["points"]
-                                        travel_time = leg["summary"]["travelTimeInSeconds"]
-                                        start_timestamp = latest_broken["timestamp"]
-
-                                        timed_points = build_timed_route_points(
-                                            route_points, start_timestamp, travel_time
-                                        )
-
-                                        ambu_path_fields = {
-                                            "ambulance_id": ambulance_id,
-                                            "travel_time": travel_time,
-                                            "route_points_timed": timed_points
-                                        }
-
-                                        ambu_path_key = f"{latest_broken['object_id']}_ambu_{ambulance_id}"
-
-                                        existing = tile38.execute_command("GET", "ambu_path2train", ambu_path_key)
-                                        if not existing:
-                                            tile38.execute_command(
-                                                "SET", "ambu_path2train", ambu_path_key,
-                                                "FIELD", "info", json.dumps(ambu_path_fields),
-                                                "OBJECT", json.dumps(latest_broken["geojson"])
-                                            )
-                                    # if isinstance(route_data, dict):
-                                    #     travel_time = route_data["routes"][0]["legs"][0]["summary"]["travelTimeInSeconds"]
-                                    # else:
-                                    #     logging.error(
-                                    #         "❌ best_route['route'] is not a dict! Actual value:")
-                                    #     logging.error(route_data)
-
-                                    # # logging.info(f"best_route eta time: {travel_time}")
-                                    # # logging.info(travel_time)
-
-                                    # try:
-
-                                    #     ambu_path_ambu_id_train_id = f"{latest_broken['object_id']}_ambu_{best_route['ambulance_id']}"
-
-                                    #     existing = tile38.execute_command(
-                                    #         "GET", "ambu_path2train", ambu_path_ambu_id_train_id)
-
-                                    #     # "6737_ambu_1"
-
-                                    #     # logging.info("existing: ")
-                                    #     # logging.info(existing)
-
-                                    #     if not existing:
-                                    #         route_points = best_route["route"]["routes"][0]["legs"][0]["points"]
-                                    #         travel_time = best_route["route"]["routes"][0][
-                                    #             "legs"][0]["summary"]["travelTimeInSeconds"]
-                                    #         start_timestamp = latest_broken["timestamp"]
-
-                                    #         num_points = len(route_points)
-                                    #         timed_points = []
-                                    #         if num_points > 0:
-                                    #             interval = travel_time / num_points
-                                    #             # logging.info("interval: ")
-                                    #             # logging.info(interval)
-
-                                    #             for idx, pt in enumerate(route_points):
-                                    #                 # 转为毫秒级时间戳
-                                    #                 eta = int(start_timestamp +
-                                    #                           (idx * interval * 800))
-
-                                    #                 # logging.info(pt["latitude"])
-                                    #                 # logging.info(pt["longitude"])
-                                    #                 timed_points.append({
-                                    #                     "latitude": pt["latitude"],
-                                    #                     "longitude": pt["longitude"],
-                                    #                     "timestamp": eta  # or "z": eta
-                                    #                 })
-
-                                    #         ambu_path_fields = {
-                                    #             "ambulance_id": best_route["ambulance_id"],
-                                    #             "travel_time": travel_time,
-                                    #             # "route_points": route_points,
-                                    #             "route_points_timed": timed_points
-                                    #         }
-
-                                    #         tile38.execute_command(
-                                    #             "SET", "ambu_path2train", ambu_path_ambu_id_train_id,
-                                    #             "FIELD", "info", json.dumps(
-                                    #                 ambu_path_fields),
-                                    #             "OBJECT", json.dumps(
-                                    #                 latest_broken["geojson"])
-                                    #         )
-
-                                        # else:
-                                        #     logging.info(f"🚫 ID {ambu_path_ambu_id_train_id} already exists in ambu_path2train. Skipped.")
-                                    
-                                    # except Exception as e:
-                                    #     logging.error(
-                                    #         f"⚠️ Error checking for existing ambu_path2train object {ambu_path_ambu_id_train_id}: {e}")
-
-                ##############
-
-                except Exception as e:
-                    logging.error(
-                        f"🚨 Error while scanning and processing broken_train data: {e}")
-
             except Exception as e:
                 logging.error(f"❌ Failed to send point to Tile38: {e}")
-
     except KeyboardInterrupt:
         logging.info("🛑 Interrupt received, shutting down consumer...")
     except Exception as e:
@@ -619,6 +475,251 @@ def main():
     finally:
         consumer.close()
         logging.info("🔚 Kafka consumer closed.")
+
+    # try:
+    #     for message in consumer:
+    #         topic = message.topic
+    #         msg = message.value
+
+    #         collection = topic.split('-')[0]  # 'train' or 'ambulance'
+
+    #         try:
+    #             lat = float(msg["lat"])
+    #             lng = float(msg["lng"])
+    #             timestamp_ms = float(msg["timestamp"])
+
+    #             fields = {}
+
+    #             if topic == "train-locations":
+    #                 object_id = msg.get("ritId", f"train_{int(timestamp_ms)}")
+    #                 fields["type"] = msg.get("type")
+    #                 fields["speed"] = msg.get("speed")
+    #                 fields["direction"] = msg.get("direction")
+    #                 fields["status"] = True
+    #                 fields["is_within_area"] = is_within_visible_radius(
+    #                     lat, lng)  # New visibility flag
+    #                 fields["accident_location"] = None
+
+    #             elif topic == "ambulance-locations":  # ambulance-locations
+    #                 ambu_related_objects = get_busy_object_ids_from_ambu_path()
+    #                 ambu_related_ids = [
+    #                     obj["ambulance_id"] for obj in ambu_related_objects] if ambu_related_objects else []
+
+    #                 vehicle_number = msg.get("vehicle_number")
+    #                 object_id = vehicle_number if vehicle_number else f"ambulance_{int(timestamp_ms)}"
+
+    #                 fields = {
+    #                     "vehicle_number": vehicle_number,
+    #                     "speed": msg.get("speed"),
+    #                     "heading": msg.get("heading"),
+    #                     "accuracy": msg.get("accuracy"),
+    #                     "type": msg.get("type"),
+    #                     "source": msg.get("source"),
+    #                     "accident_location": None,
+    #                     "availability_status": msg.get("availability_status", True)
+    #                 }
+
+    #                 if vehicle_number in ambu_related_ids:
+    #                     fields["status"] = False
+    #                 else:
+    #                     fields["status"] = True
+    #             existing_fields = {}
+    #             skip_update = False
+
+    #             try:
+    #                 existing = tile38.execute_command(
+    #                     "GET", collection, object_id, "WITHFIELDS", "OBJECT")
+    #                 if existing and isinstance(existing, list) and len(existing) >= 2:
+    #                     existing_obj = json.loads(existing[0])
+    #                     existing_fields = json.loads(
+    #                         existing[1][1])  # ['info', '{...}']
+
+    #                     if existing_fields.get("status") is False:
+    #                         skip_update = True
+    #                     elif "frozen_coords" in existing_fields:
+    #                         fields["frozen_coords"] = existing_fields["frozen_coords"]
+
+    #             except Exception as e:
+    #                 logging.warning(
+    #                     f"⚠️ Could not fetch existing data for {collection}/{object_id}: {e}")
+
+    #             if collection == "train":
+    #                 if not skip_update:
+    #                     if fields.get("status") is False:
+    #                         fields["frozen_coords"] = [lng, lat, timestamp_ms]
+    #                         geometry = json.dumps({
+    #                             "type": "Point",
+    #                             "coordinates": fields["frozen_coords"]
+    #                         })
+    #                         tile38.execute_command("SET", collection, object_id, "FIELD", "info", json.dumps(
+    #                             fields), "OBJECT", geometry)
+    #                     else:
+    #                         tile38.execute_command("SET", collection, object_id, "FIELD", "info", json.dumps(
+    #                             fields), "POINT", lat, lng, timestamp_ms)
+    #             elif collection == "ambulance":
+    #                 if fields.get("status") is False:
+    #                     matched_coord = None
+    #                     min_time_diff = float("inf")
+
+    #                     for obj in ambu_related_objects:
+    #                         if obj["ambulance_id"] == vehicle_number:
+    #                             for pt in obj.get("route_points_timed", []):
+    #                                 t_diff = abs(
+    #                                     pt["timestamp"] - timestamp_ms)
+    #                                 if t_diff < min_time_diff:
+    #                                     min_time_diff = t_diff
+    #                                     matched_coord = [
+    #                                         pt["latitude"], pt["longitude"], pt["timestamp"]]
+    #                     if matched_coord:
+    #                         tile38.execute_command(
+    #                             "SET", collection, object_id,
+    #                             "FIELD", "info", json.dumps(fields),
+    #                             "POINT", matched_coord[0], matched_coord[1], matched_coord[2]
+    #                         )
+    #                         logging.info(
+    #                             f"update ambu-{object_id} <- matched-coords {matched_coord[0]} {matched_coord[1]} since false status {matched_coord[2]}")
+    #                     else:
+    #                         logging.warning(
+    #                             f"⚠️ No matched coordinates found for {vehicle_number}, skipping POINT update.")
+    #                 else:
+    #                     tile38.execute_command(
+    #                         "SET", collection, object_id,
+    #                         "FIELD", "info", json.dumps(fields),
+    #                         "POINT", lat, lng, timestamp_ms
+    #                     )
+
+    #             latest_broken = None
+    #             latest_timestamp = -1
+    #             try:
+    #                 cursor, response = tile38.execute_command(
+    #                     "SCAN", "broken_train")
+
+    #                 if response and isinstance(response, list):
+    #                     for obj in response:
+    #                         try:
+    #                             additional_info = response[0][2] if len(
+    #                                 response[0]) > 2 else []
+    #                             info_dict = dict(
+    #                                 zip(additional_info[::2], additional_info[1::2]))
+    #                             ambulance_count = int(
+    #                                 info_dict.get("ambulance_units", "1"))
+    #                         except Exception as e:
+    #                             logging.warning(
+    #                                 f"Unable to extract ambulance_units, defaulting to 1: {e}")
+    #                             ambulance_count = 1
+
+    #                         try:
+    #                             object_id = obj[0].split("_")[1]  # train_id
+    #                             geojson_obj = json.loads(obj[1])
+    #                             coords = geojson_obj.get("coordinates", [])
+
+    #                             timestamp = coords[2]  # 1750411271244
+    #                             if timestamp > latest_timestamp:
+    #                                 latest_timestamp = timestamp
+    #                                 latest_broken = {
+    #                                     "object_id": object_id,
+    #                                     "geojson": geojson_obj,
+    #                                     "lat": coords[1],
+    #                                     "lng": coords[0],
+    #                                     "timestamp": timestamp
+    #                                 }
+    #                         except Exception as e:
+    #                             logging.warning(
+    #                                 f"Failed to parse broken_train obj {obj}: {e}")
+
+    #                         if latest_broken:  # only execute this after create incident
+
+    #                             cursor = 0
+    #                             existing_object_ids = []
+
+    #                             while True:
+    #                                 cursor, result = tile38.execute_command(
+    #                                     "SCAN", "ambu_path2train", "MATCH", "*_ambu_*")
+    #                                 objects = result if isinstance(
+    #                                     result, list) else []
+
+    #                                 for obj in objects:
+    #                                     key = obj[0] if isinstance(
+    #                                         obj, list) else obj.get("id", "")
+    #                                     if "_ambu_" in key:
+    #                                         existing_object_id = key.split("_ambu_")[
+    #                                             0]
+    #                                         existing_object_ids.append(
+    #                                             existing_object_id)
+
+    #                                 if int(cursor) == 0:
+    #                                     break
+
+    #                             if latest_broken['object_id'] not in existing_object_ids:
+    #                                 # ambulance_positions = fetch_ambulance_positions()
+    #                                 spare_ambu_positions, busy_ambu_positions = fetch_ambulance_positions()
+
+    #                                 ambu_routes = [
+    #                                     {
+    #                                         "ambulance_id": ambu["id"],
+    #                                         "route": get_route((ambu["lat"], ambu["lng"]), (latest_broken["lat"], latest_broken["lng"]))
+    #                                     }
+    #                                     for ambu in spare_ambu_positions
+    #                                 ]
+
+    #                                 ambu_routes_sorted = sorted(
+    #                                     ambu_routes,
+    #                                     key=lambda x: x["route"]["routes"][0]["legs"][0]["summary"]["travelTimeInSeconds"]
+    #                                 )
+
+    #                                 selected_routes = ambu_routes_sorted[:ambulance_count]
+
+    #                                 for route_info in selected_routes:
+    #                                     ambulance_id = route_info["ambulance_id"]
+    #                                     route_data = route_info["route"]
+
+    #                                     if not isinstance(route_data, dict):
+    #                                         logging.error(
+    #                                             f"Route data is not dict for ambulance {ambulance_id}")
+    #                                         continue
+
+    #                                     leg = route_data["routes"][0]["legs"][0]
+    #                                     route_points = leg["points"]
+    #                                     travel_time = leg["summary"]["travelTimeInSeconds"]
+    #                                     start_timestamp = latest_broken["timestamp"]
+
+    #                                     timed_points = build_timed_route_points(
+    #                                         route_points, start_timestamp, travel_time
+    #                                     )
+
+    #                                     ambu_path_fields = {
+    #                                         "ambulance_id": ambulance_id,
+    #                                         "travel_time": travel_time,
+    #                                         "route_points_timed": timed_points
+    #                                     }
+
+    #                                     ambu_path_key = f"{latest_broken['object_id']}_ambu_{ambulance_id}"
+
+    #                                     existing = tile38.execute_command(
+    #                                         "GET", "ambu_path2train", ambu_path_key)
+    #                                     if not existing:
+    #                                         tile38.execute_command(
+    #                                             "SET", "ambu_path2train", ambu_path_key,
+    #                                             "FIELD", "info", json.dumps(
+    #                                                 ambu_path_fields),
+    #                                             "OBJECT", json.dumps(
+    #                                                 latest_broken["geojson"])
+    #                                         )
+
+    #             except Exception as e:
+    #                 logging.error(
+    #                     f"🚨 Error while scanning and processing broken_train data: {e}")
+
+    #         except Exception as e:
+    #             logging.error(f"❌ Failed to send point to Tile38: {e}")
+
+    # except KeyboardInterrupt:
+    #     logging.info("🛑 Interrupt received, shutting down consumer...")
+    # except Exception as e:
+    #     logging.error(f"🚨 Error processing message: {e}")
+    # finally:
+    #     consumer.close()
+    #     logging.info("🔚 Kafka consumer closed.")
 
 
 if __name__ == "__main__":
