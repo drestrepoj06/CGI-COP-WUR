@@ -340,8 +340,11 @@ def reset_all_trains(client):
         logging.error(f"Reset failed: {e}")
         return "fail"
 
+def get_trains_within_area(client):
+    """
+    Fetches all train IDs that have is_within_area=True from Redis Tile38.
+    """
 
-def mark_random_train_as_inactive(client):
     try:
         response = client.execute_command("SCAN", "train")
         cursor = response[0]
@@ -349,26 +352,52 @@ def mark_random_train_as_inactive(client):
 
         train_ids = []
         for item in items:
-            if isinstance(item, list) and len(item) > 0:
-                train_id = item[0]
-                if isinstance(train_id, bytes):
-                    train_id = train_id.decode()
-                train_ids.append(train_id)
-            else:
-                if isinstance(item, bytes):
-                    train_ids.append(item.decode())
-                elif isinstance(item, str):
-                    train_ids.append(item)
+            try:
+                if isinstance(item, list) and len(item) > 0:
+                    train_id = item[0]
+                    info_str = item[2][1] if len(item) > 2 and isinstance(item[2], list) and len(item[2]) > 1 else None
+                    
+                    if info_str:
+                        info_obj = json.loads(info_str)
+                        if info_obj.get("is_within_area") is True:
+                            if isinstance(train_id, bytes):
+                                train_id = train_id.decode()
+                            train_ids.append(train_id)
+                else:
+                    # For non-list items (unlikely case), we need to fetch the full record
+                    train_id = item if isinstance(item, str) else item.decode()
+                    response = client.execute_command(
+                        "GET", "train", train_id, "WITHFIELDS", "OBJECT")
+                    
+                    if response and len(response) > 1:
+                        info_str = response[1][1] if len(response[1]) > 1 else None
+                        if info_str:
+                            info_obj = json.loads(info_str)
+                            if info_obj.get("is_within_area") is True:
+                                train_ids.append(train_id)
+            except Exception as e:
+                logger.warning(f"Error processing train item {item}: {e}")
+                continue
 
-        logger.info(f"Found {len(train_ids)} trains: {train_ids}")
+        logger.info(f"Found {len(train_ids)} trains within area: {train_ids}")
+        return train_ids
 
     except Exception as e:
         logger.error(f"Error scanning trains: {e}", exc_info=True)
-        return False
+        return []
 
-    selected_id = random.choice(train_ids)
-
+def mark_random_train_as_inactive(client):
     try:
+        # Get only trains within the visible area
+        train_ids = get_trains_within_area(client)
+        
+        if not train_ids:
+            logger.warning("No trains found within the visible area")
+            return False
+
+        selected_id = random.choice(train_ids)
+        logger.info(f"Selected train {selected_id} for incident")
+        
         response = client.execute_command(
             "GET", "train", selected_id, "WITHFIELDS", "OBJECT")
 
