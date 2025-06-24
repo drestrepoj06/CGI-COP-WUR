@@ -5,12 +5,72 @@ import redis
 import random
 import logging
 import datetime
+import threading
+from collections import deque
 
+broadcast_queue = asyncio.Queue()
+websocket_connections = set()
 logger = logging.getLogger("uvicorn")
 # Initialize FastAPI and Redis client
 app = FastAPI()
 client = redis.Redis(host="tile38", port=9851, decode_responses=True)
+# Redis client
+redis_client = redis.Redis(host="localhost", port=9851, decode_responses=True)
 
+# Geofence message handler
+def handle_geofence_message(message):
+    if message["type"] != "message":
+        return
+
+    try:
+        data = json.loads(message["data"])
+
+        # 1. Push the train ID into Redis alert list
+        train_id = data.get("object", {}).get("id")  # assumes format from Tile38
+        if train_id:
+            redis_client.rpush("train_alerts", train_id)
+            logger.info(f"🚨 Geofence triggered by train {train_id}, stored in Redis.")
+
+        # 2. Broadcast message to WebSocket clients
+        asyncio.run_coroutine_threadsafe(
+            broadcast_queue.put({
+                "type": "geofence_alert",
+                "data": data
+            }),
+            asyncio.get_event_loop()
+        )
+
+    except Exception as e:
+        logger.error(f"Error handling geofence event: {e}", exc_info=True)
+
+def start_geofence_listener():
+    def listen():
+        pubsub = redis_client.pubsub()
+        pubsub.psubscribe("segment_*")
+
+        for message in pubsub.listen():
+            if message['type'] == 'pmessage':
+                channel = message['channel'].decode()
+                data = json.loads(message['data'])
+
+                # Example format expected from Tile38
+                train_id = data.get('id')
+                coords = data.get('object', {}).get('coordinates')
+                timestamp = datetime.utcnow().isoformat()
+
+                # Save it (e.g. in Redis, global list, or send via websocket)
+                alert_data = {
+                    "train_id": train_id,
+                    "coords": coords,
+                    "segment": channel,
+                    "timestamp": timestamp
+                }
+
+                redis_client.rpush("alert_trains", json.dumps(alert_data))
+                logger.info(f"🚨 Train {train_id} entered inactive segment {channel}")
+
+    thread = threading.Thread(target=listen, daemon=True)
+    thread.start()
 
 def fetch_entity_positions(collection: str):
     """
@@ -306,23 +366,21 @@ def mark_random_train_as_inactive(client):
         logger.error(f"Error scanning trains: {e}", exc_info=True)
         return False
 
-    selected_id = random.choice(train_ids)  # Selected train: {selected_id}
+    selected_id = random.choice(train_ids)
 
     try:
         response = client.execute_command(
             "GET", "train", selected_id, "WITHFIELDS", "OBJECT")
 
         if response is None:
-            raise ValueError(
-                f"GET command returned None for train ID {selected_id}")
+            raise ValueError(f"GET command returned None for train ID {selected_id}")
 
         if isinstance(response, list) and len(response) >= 2:
             geometry_obj = json.loads(response[0])
-
             info_data = {}
             if len(response[1]) >= 2:
-                field_key = response[1][0]  # 'info'
-                field_value_str = response[1][1]  # JSON string
+                field_key = response[1][0]
+                field_value_str = response[1][1]
                 info_data = json.loads(field_value_str)
 
             info_data["status"] = False
@@ -339,8 +397,7 @@ def mark_random_train_as_inactive(client):
             raise ValueError(f"Unexpected response format: {response}")
 
     except Exception as e:
-        logger.error(
-            f"Failed to get object for train {selected_id}: {e}", exc_info=True)
+        logger.error(f"Failed to get object for train {selected_id}: {e}", exc_info=True)
         return False
 
     fields = train_obj["fields"]
@@ -349,8 +406,7 @@ def mark_random_train_as_inactive(client):
         fields["info"]["status"] = False
         fields["info"]["frozen_coords"] = train_obj["object"]["coordinates"]
     else:
-        logger.warning(
-            f"Train {selected_id} does not have expected info structure")
+        logger.warning(f"Train {selected_id} does not have expected info structure")
         return False
 
     try:
@@ -359,81 +415,89 @@ def mark_random_train_as_inactive(client):
         for field_key, field_value in train_obj["fields"].items():
             fields_args.extend(["FIELD", field_key, json.dumps(field_value)])
 
-        set_args = ["SET", "train", selected_id] + \
-            fields_args + ["OBJECT", geometry_json]
+        set_args = ["SET", "train", selected_id] + fields_args + ["OBJECT", geometry_json]
         logger.info(f"SET command args: {set_args}")
         client.execute_command(*set_args)
         logger.info(f"Updated train {selected_id} status to False.")
+
         check_response = client.execute_command(
             "GET", "train", selected_id, "WITHFIELDS", "OBJECT")
         logger.info(f"🔎 Post-update check for {selected_id}: {check_response}")
 
-        try:
-            coords = train_obj["object"]["coordinates"]
-            if train_obj["object"]["type"] != "Point" or len(coords) < 2:
-                raise ValueError(
-                    f"Invalid train geometry for proximity search: {coords}")
+        coords = train_obj["object"]["coordinates"]
+        if train_obj["object"]["type"] != "Point" or len(coords) < 2:
+            raise ValueError(f"Invalid train geometry for proximity search: {coords}")
 
-            lon, lat = coords[:2]
-            nearby_response = client.execute_command(
-                "NEARBY", "railsegment",
-                "POINT", float(lat), float(lon), 1000  # radius in meters
+        lon, lat = coords[:2]
+        nearby_response = client.execute_command(
+            "NEARBY", "railsegment", "POINT", float(lat), float(lon), 1000)
+
+        rail_ids = []
+        if isinstance(nearby_response, list) and len(nearby_response) > 1:
+            results = nearby_response[1]
+            for item in results:
+                if isinstance(item, list) and len(item) >= 1:
+                    rail_id = item[0]
+                    if isinstance(rail_id, bytes):
+                        rail_id = rail_id.decode()
+                    rail_ids.append(rail_id)
+
+        logger.info(f"Found {len(rail_ids)} nearby railsegments within 1 km: {rail_ids}")
+        affected_segments = []
+
+        for rail_id in rail_ids:
+            rail_get = client.execute_command(
+                "GET", "railsegment", rail_id, "WITHFIELDS", "OBJECT")
+            if rail_get is None or len(rail_get) < 2:
+                logger.warning(f"Could not retrieve railsegment {rail_id}")
+                continue
+
+            geometry_obj = json.loads(rail_get[0])
+            fields_data = {}
+            if len(rail_get[1]) >= 2:
+                fields_data = {rail_get[1][0]: json.loads(rail_get[1][1])}
+
+            fields_data.setdefault("info", {})["status"] = False
+
+            # SET updated segment in Tile38
+            field_args = []
+            for key, value in fields_data.items():
+                field_args.extend(["FIELD", key, json.dumps(value)])
+
+            set_args = ["SET", "railsegment", rail_id] + field_args + ["OBJECT", json.dumps(geometry_obj)]
+            client.execute_command(*set_args)
+            logger.info(f"Updated railsegment {rail_id} status to False")
+
+            # 🚧 Register geofence hook for this segment
+            clean_id = rail_id
+            if rail_id.startswith("segment_"):
+                clean_id = rail_id[len("segment_"):]
+
+            hook_name = f"hook_segment_{clean_id}"  
+            channel_name = f"segment_{clean_id}"
+            hook_endpoint = f"http://localhost:9000/hooks/{channel_name}"
+            geometry_only = geometry_obj.get("geometry", geometry_obj)
+
+            try:
+                client.execute_command("DELHOOK", hook_name)
+            except Exception:
+                pass  # Ignore if doesn't exist
+            
+            client.execute_command(
+                "SETHOOK", hook_name, hook_endpoint,
+                "WITHIN", "train",
+                "FENCE", "DETECT", "enter",
+                "COMMANDS", "set",
+                "WHERE", "info.status", "==", "false",
+                "OBJECT", json.dumps(geometry_only)
             )
+            logger.info(f"📡 Created geofence hook {hook_name} on channel {channel_name}")
 
-            # The response format is [cursor, [[id1, dist1], [id2, dist2], ...]]
-            rail_ids = []
-            if isinstance(nearby_response, list) and len(nearby_response) > 1:
-                results = nearby_response[1]
-                for item in results:
-                    if isinstance(item, list) and len(item) >= 1:
-                        rail_id = item[0]
-                        if isinstance(rail_id, bytes):
-                            rail_id = rail_id.decode()
-                        rail_ids.append(rail_id)
-
-            logger.info(
-                f"Found {len(rail_ids)} nearby railsegments within 1 km: {rail_ids}")
-            affected_segments = []
-
-            for rail_id in rail_ids:
-                # Get existing geometry
-                rail_get = client.execute_command(
-                    "GET", "railsegment", rail_id, "WITHFIELDS", "OBJECT")
-                if rail_get is None or len(rail_get) < 2:
-                    logger.warning(f"Could not retrieve railsegment {rail_id}")
-                    continue
-
-                geometry_obj = json.loads(rail_get[0])
-                fields_data = {}
-                if len(rail_get[1]) >= 2:
-                    fields_data = {rail_get[1][0]: json.loads(rail_get[1][1])}
-
-                # Update status to false
-                if "info" in fields_data and isinstance(fields_data["info"], dict):
-                    fields_data["info"]["status"] = False
-                else:
-                    fields_data["info"] = {"status": False}
-
-                # Prepare and send SET command
-                field_args = []
-                for key, value in fields_data.items():
-                    field_args.extend(["FIELD", key, json.dumps(value)])
-
-                set_args = ["SET", "railsegment", rail_id] + \
-                    field_args + ["OBJECT", json.dumps(geometry_obj)]
-                client.execute_command(*set_args)
-                logger.info(f"Updated railsegment {rail_id} status to False")
-
-                # 🔴 Add to affected_segments
-                affected_segments.append({
-                    "type": "Feature",
-                    "geometry": geometry_obj,
-                    "properties": fields_data["info"]
-                })
-
-        except Exception as e:
-            logger.error(
-                f"❌ Failed to update nearby railsegments: {e}", exc_info=True)
+            affected_segments.append({
+                "type": "Feature",
+                "geometry": geometry_obj,
+                "properties": fields_data["info"]
+            })
 
         incident = create_incident(
             client, selected_id, train_obj["object"], description="Train marked inactive due to incident")
@@ -444,23 +508,15 @@ def mark_random_train_as_inactive(client):
         }
 
     except Exception as e:
-        logger.error(
-            f"Failed to update train {selected_id}: {e}", exc_info=True)
+        logger.error(f"Failed to update train {selected_id}: {e}", exc_info=True)
         return None
-
-
 @app.websocket("/ws/scan")
 async def scan_websocket(websocket: WebSocket):
-    """
-    WebSocket endpoint that continuously scans data and sends updates every second,
-    ensuring each full SCAN query is completed before restarting.
-    """
-
-    print("[INFO] WebSocket connected.")
     await websocket.accept()
+    websocket_connections.add(websocket)
 
     try:
-        request_data = await websocket.receive_text()  # Receive collection request once
+        request_data = await websocket.receive_text()
         collection = json.loads(request_data).get("collection")
 
         if not collection:
@@ -472,29 +528,38 @@ async def scan_websocket(websocket: WebSocket):
             cursor = 0
 
             try:
-                # 🚀 **Loop through all pages of SCAN results**
+                # SCAN all objects in the collection
                 while True:
                     cursor, response = client.execute_command(
                         "SCAN", collection, "CURSOR", cursor)
-                    all_records.extend(response)  # Append retrieved data
-
-                    if cursor == 0:  # 🌍 If cursor is 0, all data has been retrieved
+                    all_records.extend(response)
+                    if cursor == 0:
                         break
 
-                # print(f"[DEBUG] Total records fetched: {len(all_records)}")  # Log full dataset size
-
-                raw_data = {"collection": collection,
-                            "data": all_records}  # Prepare data
-                # Send data to client
+                # Send the scanned data
+                raw_data = {"type": "scan", "collection": collection, "data": all_records}
                 await websocket.send_text(json.dumps(raw_data))
 
+                # Send any geofence alerts from the broadcast queue
+                while not broadcast_queue.empty():
+                    geofence_event = await broadcast_queue.get()
+                    await websocket.send_text(json.dumps(geofence_event))
+
+                # PART B: Send list of stored alerting train IDs
+                train_alert_ids = redis_client.lrange("train_alerts", 0, -1)
+                if train_alert_ids:
+                    await websocket.send_text(json.dumps({
+                        "type": "train_alert_list",
+                        "data": train_alert_ids
+                    }))
+
             except Exception as e:
-                # print(f"[ERROR] SCAN failed for {collection}: {e}")
                 await websocket.send_text(json.dumps({"error": f"SCAN failed: {e}"}))
 
-            # ⏳ **Wait 1 second before starting a new SCAN query**
             await asyncio.sleep(1)
 
     except Exception as e:
-        # print(f"[ERROR] WebSocket error: {e}")
+        logger.error(f"WebSocket error: {e}")
+    finally:
+        websocket_connections.discard(websocket)
         await websocket.close()
