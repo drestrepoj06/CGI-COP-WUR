@@ -28,6 +28,7 @@ def display_rescue_ambu():
         try:
             result = process_broken_trains_and_assign_ambulances()
             if result["status"] == "success":
+                st.session_state["tqdm"] = True
                 st.rerun()
             else:
                 st.session_state["rescue_disabled"] = False  # 恢复状态以便用户重试
@@ -85,6 +86,8 @@ def display_reset_button():
             st.session_state['button_states']['reset_disabled'] = True
             st.session_state['button_states']['show_incident'] = False
             st.session_state['button_states']['show_reset_success'] = True
+
+            st.session_state["tqdm"] = False
 
             st.rerun()
 
