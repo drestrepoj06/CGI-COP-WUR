@@ -13,13 +13,15 @@ Currently working on:
 
 Requirements:  
 - [ ] 2a. Set realistic speed when an ambulance is driving towards incident location.
-- [ ] 2b. Estimated Time of Arrival of ambulance to incident location
+- [ ] 2b. Estimated Time of Arrival of ambulance to incident location.(Xiaolu)
+- [ ] 2c. Create button to request and send the ambus.
+- [ ] 2d. Reset all ambulances when reset trains.
 
 ---
 Other tasks:
 - [ ] 3. Write doc to explain mock-up data file:  
-- [ ] 4. Link charts and graphs to data on the map.
-- [ ] 5. Send multiple ambulances to incident location based on severity.
+- [ ] 4. Link charts and graphs to data on the map.(Falco)
+- [x] 5. Send multiple ambulances to incident location based on severity.
 
 ---
 
