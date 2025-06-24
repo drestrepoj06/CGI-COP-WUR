@@ -1,27 +1,25 @@
 import streamlit as st
+import time
 from utils.web_map import render_map_section
-from utils.web_controls import render_train_controls
-from utils.web_ambulance import display_ambulance_availabitity_data
-from utils.join_query import display_rescue_progress_auto
-
-import redis
-
-
-client = redis.Redis(host="tile38", port=9851, decode_responses=True)
-
+from utils.web_controls import render_train_controls, display_ambulance_alerts, display_train_alerts
+from utils.web_ambulance import display_ambulance_data
 
 def render_dashboard():
+
+    # Create columns for layout
     col = st.columns((2.7, 4.8, 1), gap="small")
 
     with col[0]:
-        display_ambulance_availabitity_data()
+        # Render the ambulance data and control buttons
+        ambulance_data = display_ambulance_data()
+
+        # Button to manually refresh the alerts
+        if st.button("Refresh Alerts"):
+            display_ambulance_alerts()
+            display_train_alerts()
 
     with col[1]:
-        render_map_section()
-
-        display_rescue_progress_auto(client)
-
-
+        render_map_section(ambulance_data)
 
     with col[2]:
         render_train_controls()
