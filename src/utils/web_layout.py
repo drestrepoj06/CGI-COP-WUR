@@ -14,6 +14,7 @@ def configure_app():
     )
 
 def initialize_session_state():
+    # Initialize button states
     if 'button_states' not in st.session_state:
         st.session_state['button_states'] = {
             'stop_disabled': False,
@@ -21,3 +22,4 @@ def initialize_session_state():
             'show_incident': False,
             'show_reset_success': False
         }
+    
