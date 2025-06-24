@@ -18,7 +18,7 @@ def render_dashboard():
     with col[1]:
         render_map_section(ambulance_data)
 
-        # display_rescue_progress_auto(client)
+        display_rescue_progress_auto(client)
 
     with col[2]:
         render_train_controls()

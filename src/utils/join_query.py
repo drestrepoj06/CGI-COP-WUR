@@ -8,8 +8,8 @@ import streamlit as st
 
 
 def display_rescue_progress_auto(client):
-    # Refresh every 1 second
-    st_autorefresh(interval=1000, key="rescue_polling")
+    # Refresh every 2 second
+    st_autorefresh(interval=2000, key="rescue_polling")
 
     progress_data = get_ambulance_progress(client)
 
