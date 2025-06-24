@@ -24,11 +24,16 @@ def display_rescue_ambu():
         st.session_state["rescue_disabled"] = True  # 默认禁止
 
     if st.button("🚑 Send Rescue Ambulances", disabled=st.session_state["rescue_disabled"], key="rescue_ambu_button"):
+        st.session_state["rescue_disabled"] = True  # 一点击立刻禁用
         try:
-            process_broken_trains_and_assign_ambulances()
-            st.session_state["rescue_disabled"] = True  # 一旦派遣，立即禁用
-            st.rerun()
+            result = process_broken_trains_and_assign_ambulances()
+            if result["status"] == "success":
+                st.rerun()
+            else:
+                st.session_state["rescue_disabled"] = False  # 恢复状态以便用户重试
+                st.error("Dispatch failed: " + result.get("error", "Unknown reason"))
         except Exception as e:
+            st.session_state["rescue_disabled"] = False  # 出错时恢复状态
             logging.error(f"Rescue dispatch failed: {e}")
             st.error("An error occurred while sending rescue ambulances.")
 

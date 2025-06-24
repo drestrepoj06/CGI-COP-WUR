@@ -26,6 +26,7 @@ RAIL_SEGMENTS_JSON_FILE_PATH = "utils/UtrechtRailsSegments.geojson"
 
 
 def process_broken_trains_and_assign_ambulances():
+    dispatched_ambulances = []  # 记录成功派遣的救护车信息
     latest_broken = None
     latest_timestamp = -1
 
@@ -34,19 +35,15 @@ def process_broken_trains_and_assign_ambulances():
         if response and isinstance(response, list):
             for obj in response:
                 try:
-                    additional_info = response[0][2] if len(
-                        response[0]) > 2 else []
-                    info_dict = dict(
-                        zip(additional_info[::2], additional_info[1::2]))
-                    ambulance_count = int(
-                        info_dict.get("ambulance_units", "1"))
+                    additional_info = response[0][2] if len(response[0]) > 2 else []
+                    info_dict = dict(zip(additional_info[::2], additional_info[1::2]))
+                    ambulance_count = int(info_dict.get("ambulance_units", "1"))
                 except Exception as e:
-                    logging.warning(
-                        f"Unable to extract ambulance_units, defaulting to 1: {e}")
+                    logging.warning(f"Unable to extract ambulance_units, defaulting to 1: {e}")
                     ambulance_count = 1
 
                 try:
-                    object_id = obj[0].split("_")[1]  # train_id
+                    object_id = obj[0].split("_")[1]
                     geojson_obj = json.loads(obj[1])
                     coords = geojson_obj.get("coordinates", [])
                     timestamp = coords[2]
@@ -60,19 +57,16 @@ def process_broken_trains_and_assign_ambulances():
                             "timestamp": timestamp
                         }
                 except Exception as e:
-                    logging.warning(
-                        f"Failed to parse broken_train obj {obj}: {e}")
+                    logging.warning(f"Failed to parse broken_train obj {obj}: {e}")
 
             if latest_broken:
                 cursor = 0
                 existing_object_ids = []
                 while True:
-                    cursor, result = tile38.execute_command(
-                        "SCAN", "ambu_path2train", "MATCH", "*_ambu_*")
+                    cursor, result = tile38.execute_command("SCAN", "ambu_path2train", "MATCH", "*_ambu_*")
                     objects = result if isinstance(result, list) else []
                     for obj in objects:
-                        key = obj[0] if isinstance(
-                            obj, list) else obj.get("id", "")
+                        key = obj[0] if isinstance(obj, list) else obj.get("id", "")
                         if "_ambu_" in key:
                             existing_object_id = key.split("_ambu_")[0]
                             existing_object_ids.append(existing_object_id)
@@ -98,32 +92,42 @@ def process_broken_trains_and_assign_ambulances():
                         ambulance_id = route_info["ambulance_id"]
                         route_data = route_info["route"]
                         if not isinstance(route_data, dict):
-                            logging.error(
-                                f"Route data is not dict for ambulance {ambulance_id}")
+                            logging.error(f"Route data is not dict for ambulance {ambulance_id}")
                             continue
                         leg = route_data["routes"][0]["legs"][0]
                         route_points = leg["points"]
                         travel_time = leg["summary"]["travelTimeInSeconds"]
                         start_timestamp = latest_broken["timestamp"]
-                        timed_points = build_timed_route_points(
-                            route_points, start_timestamp, travel_time)
+                        timed_points = build_timed_route_points(route_points, start_timestamp, travel_time)
                         ambu_path_fields = {
                             "ambulance_id": ambulance_id,
                             "travel_time": travel_time,
                             "route_points_timed": timed_points
                         }
                         ambu_path_key = f"{latest_broken['object_id']}_ambu_{ambulance_id}"
-                        existing = tile38.execute_command(
-                            "GET", "ambu_path2train", ambu_path_key)
+                        existing = tile38.execute_command("GET", "ambu_path2train", ambu_path_key)
                         if not existing:
                             tile38.execute_command(
                                 "SET", "ambu_path2train", ambu_path_key,
                                 "FIELD", "info", json.dumps(ambu_path_fields),
                                 "OBJECT", json.dumps(latest_broken["geojson"])
                             )
+                            dispatched_ambulances.append({
+                                "ambulance_id": ambulance_id,
+                                "train_id": latest_broken["object_id"],
+                                "travel_time": travel_time
+                            })
+
     except Exception as e:
-        logging.error(
-            f"🚨 Error while scanning and processing broken_train data: {e}")
+        logging.error(f"🚨 Error while scanning and processing broken_train data: {e}")
+        return {"status": "error", "error": str(e), "dispatched": []}
+
+    return {
+        "status": "success",
+        "train_id": latest_broken["object_id"] if latest_broken else None,
+        "dispatched": dispatched_ambulances
+    }
+
 
 
 def store_rail_segments():
