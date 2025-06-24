@@ -19,7 +19,7 @@ def render_dashboard():
             display_train_alerts()
 
     with col[1]:
-        render_map_section(ambulance_data)
+        render_map_section()
 
     with col[2]:
         render_train_controls()
