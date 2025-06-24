@@ -8,6 +8,21 @@ logger = logging.getLogger("uvicorn")
 client = redis.Redis(host="tile38", port=9851, decode_responses=True)
 
 
+def clear_ambu_path_and_broken_train(client):
+    """清空 ambu_path2train 和 broken_train 集合"""
+    try:
+        client.execute_command("DROP", "ambu_path2train")
+        logging.info("✅ Cleared ambu_path2train collection.")
+
+        client.execute_command("DROP", "broken_train")
+        logging.info("✅ Cleared broken_train collection.")
+
+        return "success"
+    except Exception as e:
+        logging.error(f"❌ Failed to clear collections: {e}")
+        return "fail"
+
+
 # def fetch_ambulance_positions():
 #     """
 #     Fetches ambulance location data and returns only ID and coordinates.

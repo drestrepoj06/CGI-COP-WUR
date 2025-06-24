@@ -4,6 +4,9 @@ import logging
 from websocket_server import mark_random_train_as_inactive, reset_all_trains
 import redis
 
+from utils.navigate import clear_ambu_path_and_broken_train
+
+
 client = redis.Redis(host="tile38", port=9851, decode_responses=True)
 
 
@@ -49,6 +52,9 @@ def display_reset_button():
     ):
         try:
             reset_all_trains(client)
+
+            clear_ambu_path_and_broken_train(client)
+
             st.session_state['button_states']['stop_disabled'] = False
             st.session_state['button_states']['reset_disabled'] = True
             st.session_state['button_states']['show_incident'] = False
