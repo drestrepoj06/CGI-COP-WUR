@@ -82,7 +82,7 @@ for i, origin in enumerate(ambulance_origins):
         "current_pos": origin,
         "destination": destination,
         "is_stationary": False,
-        "station_name": "No station",
+        "station_name": "On the move",
         "availability_status": get_initial_availability(False),
         "speed_kph": random.uniform(AVERAGE_SPEED_KPH-10, AVERAGE_SPEED_KPH+10),
         "route_points": route_points,
@@ -166,7 +166,7 @@ while time.time() < start_time + simulation_minutes * 60:
                 "heading": round(bearing, 1),
                 "availability_status": ambulance["availability_status"],
                 "is_stationary": False,
-                "station_name": "No station",
+                "station_name": "On the move",
                 "destination": ambulance["destination"]
             })
    
