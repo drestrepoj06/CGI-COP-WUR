@@ -11,7 +11,7 @@ client = redis.Redis(host="tile38", port=9851, decode_responses=True)
 
 
 def render_train_controls():
-    st.markdown("### Train Control")
+    st.markdown("### Dashboard Control")
     display_stop_button()
     display_rescue_ambu()
     display_reset_button()
@@ -23,7 +23,7 @@ def display_rescue_ambu():
     if "rescue_disabled" not in st.session_state:
         st.session_state["rescue_disabled"] = True  # 默认禁止
 
-    if st.button("🚑 Send Rescue Ambulances", disabled=st.session_state["rescue_disabled"], key="rescue_ambu_button"):
+    if st.button("🚑 Request Ambulances", disabled=st.session_state["rescue_disabled"], key="rescue_ambu_button"):
         st.session_state["rescue_disabled"] = True  # 一点击立刻禁用
         try:
             result = process_broken_trains_and_assign_ambulances()
@@ -35,9 +35,9 @@ def display_rescue_ambu():
         except Exception as e:
             st.session_state["rescue_disabled"] = False  # 出错时恢复状态
             logging.error(f"Rescue dispatch failed: {e}")
-            st.error("An error occurred while sending rescue ambulances.")
+            st.error("An error occurred while requesting ambulances.")
 
-    st.caption("(This send ambulance(s))")
+    st.caption("(This requests ambulance(s))")
 
 
 def display_stop_button():
@@ -92,7 +92,7 @@ def display_reset_button():
             logging.error(f"Failed to reset trains: {e}")
             st.error("An error occurred while resetting trains.")
 
-    st.caption("(This will reset all trains)")
+    st.caption("(This resets all trains and ambulances)")
 
 
 def display_incident_summary():

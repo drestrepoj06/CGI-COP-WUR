@@ -32,7 +32,10 @@
 
         // Initialize Map
         function initMap() {
-            const map = L.map('map').setView([52.1, 5.1], 12);
+            const map = L.map('map', {
+                zoomSnap: 0.1,  // Allows zoom levels like 12.1, 12.2, etc.
+                zoomDelta: 0.5   // Controls how much zoom changes with each zoom interaction
+            }).setView([52.094040, 5.093102], 11.9);  // Example with decimal zoom level
 
             // Mapbox Light Gray Tile Layer
             L.tileLayer('https://api.mapbox.com/styles/v1/mapbox/navigation-day-v1/tiles/{z}/{x}/{y}?access_token=pk.eyJ1IjoicnVvdGFsIiwiYSI6ImNtYmh5ZjA5eDAyN3kyanI0cGE2b295MW0ifQ.Cf2xGVOEXF-7hbunq3soyw', {

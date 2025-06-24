@@ -356,8 +356,8 @@ def build_timed_route_points(route_points, start_timestamp, travel_time):
         {
             "latitude": pt["latitude"],
             "longitude": pt["longitude"],
-            # 1s == 1,000 ms but we want 1s == 400 ms
-            "timestamp": int(start_timestamp + idx * interval * 400)
+            # 1s == 1,000 ms but we want 1s == 800 ms
+            "timestamp": int(start_timestamp + idx * interval * 800)
         }
         for idx, pt in enumerate(route_points)
     ]
