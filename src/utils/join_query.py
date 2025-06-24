@@ -3,10 +3,9 @@ import asyncio
 import redis
 import json
 import logging
+from datetime import datetime
 
 import streamlit as st
-
-from stqdm import stqdm
 
 # Tile38 setup
 TILE38_HOST = 'tile38'
@@ -14,9 +13,7 @@ TILE38_PORT = 9851
 
 
 async def record_ambulance_path(route_points, timestamp, route_estimated_time, ambulance_id):
-    """
-    连接 Tile38 数据库，并记录救护车路径。
-    """
+
     tile38_client = redis.Redis(
         host=TILE38_HOST, port=TILE38_PORT, decode_responses=True)
 
@@ -33,28 +30,40 @@ async def record_ambulance_path(route_points, timestamp, route_estimated_time, a
 
         print(f"Recorded: {command}")
 
-    print("所有救护车路径点已存入 Tile38.")
-
 
 def display_rescue_progress_auto(client):
-    # Refresh the entire component every 1 second
+    # Refresh every 1 second
     st_autorefresh(interval=1000, key="rescue_polling")
 
     progress_data = get_ambulance_progress(client)
 
     if progress_data:
-        st.markdown("### ⏱️ Rescue Progress")
+        # st.markdown("### ⏱️ Rescue Progress")
         for ambu in progress_data:
             ambulance_id = ambu["ambulance_id"]
+            eta = ambu["eta"]
             travel_time = ambu["travel_time"]
             past_time = ambu["past_time"]
 
             percent = min(past_time / travel_time, 1.0) if travel_time else 0.0
+            remaining_seconds = max(travel_time - past_time, 0)
 
-            st.markdown(f"**🚑 Ambulance {ambulance_id}**")
+            # Convert remaining time into minutes and seconds
+            minutes = int(remaining_seconds // 60)
+            seconds = int(remaining_seconds % 60)
+
+            # Format ETA
+            eta_readable = datetime.fromtimestamp(
+                eta / 1000).strftime('%Y-%m-%d %H:%M:%S')
+
+            st.markdown(
+                f"**🚑 Ambulance {ambulance_id}**  \n"
+                f"ETA: {eta_readable} | Remaining Time: {minutes}m {seconds}s"
+            )
+
             st.progress(percent)
-    else:
-        st.info("Waiting for ambulance path data...")
+    # else:
+    #     st.info("Waiting for ambulance path data...")
 
 
 def get_ambulance_progress(client):
@@ -143,7 +152,8 @@ def get_ambulance_progress(client):
                 results.append({
                     "ambulance_id": ambulance_id,
                     "past_time": round(past_time, 2),
-                    "travel_time": travel_time
+                    "travel_time": travel_time,
+                    "eta": ts_max,
                 })
 
             except Exception as e:

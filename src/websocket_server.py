@@ -168,7 +168,7 @@ def create_incident(client, train_id, location, description="Incident reported",
 
     SEVERITY_DESCRIPTION_MAP = {
         "low": [
-            "Passenger with mild nausea",
+            "Passenger with mild nausea", 
             "Passenger feeling light-headed",
             "Complaint of headache",
             "Minor allergic reaction"
