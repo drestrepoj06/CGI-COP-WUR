@@ -72,21 +72,11 @@
                     opacity: 0.8
                 }
             }).addTo(map);
-
-            // L.polyline(routePoints, {
-            //     color: '#FF00FF',  // 浅紫色 (淡紫罗兰)
-            //     weight: 7,         // 线条宽度
-            //     opacity: 0.9       // 设置透明度 (0.0 完全透明 - 1.0 完全不透明)
-            // }).addTo(map);
-
-
+            
             return map;
         }
 
         const map = initMap();
-
-
-
 
         // Utility function for formatting timestamps
         function formatTimestamp(unixMs) {
@@ -335,10 +325,6 @@
                 ambulanceSocket.send(JSON.stringify({ collection: "ambulance" })); // 请求救护车数据
             };
 
-            // ambuPathSocket.onopen = () => {
-            //     ambuPathSocket.send(JSON.stringify({ collection: "ambu_path" })); // 请求路径数据
-            // };
-
             ambulanceSocket.onmessage = event => {
                 const data = JSON.parse(event.data);
                 console.log("🚑 Ambulance Data Received:", data);
@@ -351,32 +337,14 @@
                 updateAmbulancePositions(ambulanceData, ambuPathData || []);
             };
 
-            // ambuPathSocket.onmessage = event => {
-            //     const data = JSON.parse(event.data);
-            //     // console.log("🛣️ Ambulance Path Data Received:", data);
-
-            //     // 如果收到的数据不包含 `ambu_path`，就忽略更新
-            //     if (data.collection === "ambu_path") {
-            //         ambuPathData = data.data || []; // 确保数据不为空
-            //         updateAmbulancePositions(ambulanceData, ambuPathData);
-            //     } else {
-            //         console.warn("⚠️ 'ambu_path' collection not found, skipping update.");
-            //     }
-            // };
-
             ambulanceSocket.onerror = error => console.error("🚨 Ambulance WebSocket Error:", error);
-            // ambuPathSocket.onerror = error => console.error("🚨 Ambulance Path WebSocket Error:", error);
         }
-
-
 
         // Initialize both WebSocket connections
         initTrainWebSocket();
         initAmbulanceWebSocket();
 
-
-
-        let ambulancePolylines = []; // 全局变量，用于追踪当前渲染的路径
+        let ambulancePolylines = []; // holds { centerLine, innerLine }
 
         function drawAmbulanceRoutesFromTile38() {
             const socket = new WebSocket("ws://localhost:8000/ws/scan");
@@ -388,19 +356,17 @@
             socket.onmessage = (event) => {
                 try {
                     const data = JSON.parse(event.data);
+                    if (data.collection !== "ambu_path2train" || !Array.isArray(data.data)) return;
 
-                    if (data.collection !== "ambu_path2train" || !Array.isArray(data.data)) {
-                        console.warn("⚠️ Unexpected ambu_path2train data.");
-                        return;
-                    }
-
-                    // 清除旧有 polyline（地图上已存在的救护车轨迹）
-                    ambulancePolylines.forEach(polyline => map.removeLayer(polyline));
+                    // Remove old polylines
+                    ambulancePolylines.forEach(({ centerLine, innerLine }) => {
+                        map.removeLayer(centerLine);
+                        map.removeLayer(innerLine);
+                    });
                     ambulancePolylines = [];
 
                     data.data.forEach(item => {
                         const [id, geojsonStr, fieldArr] = item;
-
                         if (!Array.isArray(fieldArr) || fieldArr[0] !== "info") return;
 
                         let info;
@@ -416,37 +382,32 @@
 
                         const latlngs = points.map(p => [p.latitude, p.longitude]);
 
-                        const polyline = L.polyline(latlngs, {
-                            color: "red",
-                            weight: 8,
-                            opacity: 0.7
-                        }).addTo(map);
+                        const outerLine = L.polyline(latlngs, { color: "black", weight: 10, opacity: 1 }).addTo(map);
+                        const centerLine = L.polyline(latlngs, { color: "red", weight: 8, opacity: 1 }).addTo(map);
+                        const innerLine = L.polyline(latlngs, { color: "white", weight: 3, opacity: 1 }).addTo(map);
 
-                        // 保存到追踪数组
-                        ambulancePolylines.push(polyline);
-
-                        // 设置闪烁颜色切换
-                        let isRed = true;
-                        setInterval(() => {
-                            const color = isRed ? "yellow" : "red";
-                            polyline.setStyle({ color });
-                            isRed = !isRed;
-                        }, 500);
-
-                        polyline.bindPopup(`🚑 Ambulance ${info.ambulance_id || id}`);
+                        ambulancePolylines.push({ centerLine, innerLine });
                     });
                 } catch (err) {
                     console.error("🚨 Failed to render ambu_path2train:", err);
                 }
             };
-
-            socket.onerror = (err) => {
-                console.error("🚨 WebSocket error (ambu_path2train):", err);
-            };
         }
 
-
-
+        // Global blinking toggle
+        let isRed = true;
+        setInterval(() => {
+            ambulancePolylines.forEach(({ centerLine, innerLine }) => {
+                if (isRed) {
+                    centerLine.setStyle({ color: "white" });
+                    innerLine.setStyle({ color: "red" });
+                } else {
+                    centerLine.setStyle({ color: "red" });
+                    innerLine.setStyle({ color: "white" });
+                }
+            });
+            isRed = !isRed;
+        }, 500);
 
         drawAmbulanceRoutesFromTile38();
 
@@ -517,12 +478,7 @@
             });
         }
 
-
-
-        // railsegmentWebSocket();
-
-
-    </script>
+   </script>
 </body>
 
 </html>
