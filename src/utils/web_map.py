@@ -4,7 +4,7 @@ from utils.web_map_loader import load_map_html, generate_incident_js
 import logging
 
 
-def render_map_section(ambulance_data):
+def render_map_section():
     st.subheader("Incident Map")
     map_html = load_map_html()
     incident_js, segment_js = generate_incident_js()
