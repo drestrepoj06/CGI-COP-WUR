@@ -400,6 +400,7 @@ def main():
                         "type": msg.get("type"),
                         "source": msg.get("source"),
                         "accident_location": None,
+                        "station_name": msg.get("station_name"),
                         "availability_status": msg.get("availability_status", True)
                     }
                     if vehicle_number in ambu_related_ids:
