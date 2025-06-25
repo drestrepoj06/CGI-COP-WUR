@@ -297,14 +297,22 @@
                         ? 'https://raw.githubusercontent.com/drestrepoj06/CGI-COP-WUR/main/src/vec/ambulance_available.png'
                         : 'https://raw.githubusercontent.com/drestrepoj06/CGI-COP-WUR/main/src/vec/ambulance_unavailable.png';
 
-                    const ambulanceIcon = L.icon({
-                        iconUrl: iconUrl,
-                        iconSize: [26, 26],
-                        iconAnchor: [10, 10],
-                        popupAnchor: [0, -16]
+                    const isGoingToIncident = info.status === true;
+                    const ambulanceIcon = isGoingToIncident
+                        ? L.icon({
+                            iconUrl: iconUrl,
+                            iconSize: [26, 26],
+                            iconAnchor: [10, 10],
+                            popupAnchor: [0, -16]
+                        })
+                        : L.icon({
+                            iconUrl: iconUrl,
+                            iconSize: [36, 36],
+                            iconAnchor: [10, 10],
+                            popupAnchor: [0, -16]
                     });
-
-                    const statusText = isAvailable ? 'Available' : 'Unavailable';
+                    const isAvailableForPopup = info.availability_status === true && info.status === true
+                    const statusText = isAvailableForPopup ? 'Available' : 'Unavailable';
                     const popupContent = `🚑 Ambulance ${id}<br/>⏰ ${formatTimestamp(timestamp)}<br/>Status: ${statusText}`;
 
                     if (!ambulanceMarkers[id]) {

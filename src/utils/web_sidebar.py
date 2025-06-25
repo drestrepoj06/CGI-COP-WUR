@@ -1,7 +1,7 @@
 import streamlit as st
 
 def render_sidebar():
-    st.title("RCOP Railway Operations Center")
+    st.title("RCOP Railway Operations Center for Meldkamer Spoor")
 
     st.markdown("""
     🚨 **Emergency Simulation Dashboard**
