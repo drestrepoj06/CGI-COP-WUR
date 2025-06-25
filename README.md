@@ -1,6 +1,6 @@
 Currently working on:
 - [x] 1a. Change 1km nearby railsegments FIELD 'status' from TRUE to FALSE lay them over real-time traffic density. (Mate or Jhon after 1e-f)
-- [ ] 1b. Send **GEOFENCING** on the segments that 'status' are FALSE. Send alert when other trains come across them.  (Mate or Jhon after 1e-f)
+- [ ] 1b. **Send **GEOFENCING** on the segments that 'status' are FALSE. Send alert when other trains come across them.  (Mate or Jhon after 1e-f)**
 - [x] 1c. Calculate estimated driving time from current ambu to this 'accident_location' based on Tomtom API. **Move code into the consumer** (Xiaolu)
 - [x] 1d. Fix bug with having to refresh the button (should be fixed by completing 1c). (Xiaolu)
 - [x] **1c&d** comment: maybe still bug existing
@@ -16,17 +16,21 @@ Requirements:
 - [x] 2b. Estimated Time of Arrival of ambulance to incident location.(Xiaolu)
 - [x] 2c. Create button to request and send the ambus.(Xiaolu)
 - [x] 2d. Reset all ambulances when reset trains. (Xiaolu)
-- [ ] 2e. Add resolving time. (Xiaolu)
+- [ ] 2e. **Add resolving time. (Xiaolu)**
 - [x] 2f. Make the ambu request button unclickable. (Xiaolu)
 
 ---
 Other tasks:
 - [ ] 3. Write doc to explain mock-up data file:  
-- [ ] 4. Link charts and graphs to data on the map.(Falco)
+- [x] 4. Link charts and graphs to data on the map.(Falco)
 - [x] 5. Send multiple ambulances to incident location based on severity. (Xiaolu)
-- [ ] 6. Move the screen components on Wednesday.
+- [x] 6. Move the screen components on Wednesday. (Falco)
 
+**BUGS**:
 
+- [ ] 1. Fix simulate incident button. Sometimes no incident info returned to screen. (Xiaolu)
+- [ ] 2.
+- 
 ---
 
 # 🚆 RCOP ![Python](https://img.shields.io/badge/Python-3.12-green?logo=python)![Docker](https://img.shields.io/badge/Docker-Compose-blue?logo=docker)![License](https://img.shields.io/badge/License-GPL-green)
