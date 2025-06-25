@@ -312,8 +312,8 @@
                             popupAnchor: [0, -16]
                     });
                     const isAvailableForPopup = info.availability_status === true && info.status === true
-                    const statusText = isAvailableForPopup ? 'Available' : 'Unavailable';
-                    const popupContent = `🚑 Ambulance ${id}<br/>⏰ ${formatTimestamp(timestamp)}<br/>Status: ${statusText}`;
+                    const statusText = isAvailableForPopup ? '✅ Status: Available' : '❌ Status: Unavailable';
+                    const popupContent = `🚑 Ambulance ${id}<br/>⏰ ${formatTimestamp(timestamp)}<br/>${statusText}`
 
                     if (!ambulanceMarkers[id]) {
                         ambulanceMarkers[id] = L.marker(latlng, { icon: ambulanceIcon })
