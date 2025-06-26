@@ -1,0 +1,140 @@
+{
+    "type": "FeatureCollection",
+    "features": [
+        {
+            "type": "Feature",
+            "id": 1,
+            "geometry": {
+                "type": "Point",
+                "coordinates": [
+                    5.1254873862078076,
+                    52.110077803787085
+                ]
+            },
+            "properties": {
+                "OBJECTID": 1,
+                "StationName": "Utrecht Overvecht"
+            }
+        },
+        {
+            "type": "Feature",
+            "id": 2,
+            "geometry": {
+                "type": "Point",
+                "coordinates": [
+                    5.0896922691837689,
+                    52.103031411466198
+                ]
+            },
+            "properties": {
+                "OBJECTID": 2,
+                "StationName": "Utrecht Zuilen"
+            }
+        },
+        {
+            "type": "Feature",
+            "id": 3,
+            "geometry": {
+                "type": "Point",
+                "coordinates": [
+                    5.0656582812367041,
+                    52.098935897617245
+                ]
+            },
+            "properties": {
+                "OBJECTID": 3,
+                "StationName": "Utrecht Leidsche Rijn"
+            }
+        },
+        {
+            "type": "Feature",
+            "id": 4,
+            "geometry": {
+                "type": "Point",
+                "coordinates": [
+                    5.0435128466642665,
+                    52.100225824612515
+                ]
+            },
+            "properties": {
+                "OBJECTID": 4,
+                "StationName": "Utrecht Terwijde"
+            }
+        },
+        {
+            "type": "Feature",
+            "id": 5,
+            "geometry": {
+                "type": "Point",
+                "coordinates": [
+                    5.10992145172811,
+                    52.089803208602241
+                ]
+            },
+            "properties": {
+                "OBJECTID": 5,
+                "StationName": "Utrecht Centraal"
+            }
+        },
+        {
+            "type": "Feature",
+            "id": 6,
+            "geometry": {
+                "type": "Point",
+                "coordinates": [
+                    5.1221164922401394,
+                    52.078654603487017
+                ]
+            },
+            "properties": {
+                "OBJECTID": 6,
+                "StationName": "Utrecht Vaartsche Rijn"
+            }
+        },
+        {
+            "type": "Feature",
+            "id": 7,
+            "geometry": {
+                "type": "Point",
+                "coordinates": [
+                    5.1426550689413624,
+                    52.067083478702841
+                ]
+            },
+            "properties": {
+                "OBJECTID": 7,
+                "StationName": "Utrecht Lunetten"
+            }
+        },
+        {
+            "type": "Feature",
+            "id": 8,
+            "geometry": {
+                "type": "Point",
+                "coordinates": [
+                    5.0332091991015231,
+                    52.135851833947157
+                ]
+            },
+            "properties": {
+                "OBJECTID": 8,
+                "StationName": "Maarssen"
+            }
+        },
+        {
+            "type": "Feature",
+            "id": 9,
+            "geometry": {
+                "type": "Point",
+                "coordinates": [
+                    5.0074120500170434,
+                    52.102985325867579
+                ]
+            },
+            "properties": {
+                "OBJECTID": 9,
+                "StationName": "Vleuten"
+            }
+        }
+    ]
+}
