@@ -13,7 +13,7 @@
             },
             "properties": {
                 "OBJECTID": 1,
-                "StationName": "UtrechtOvervecht"
+                "StationName": "Utrecht Overvecht"
             }
         },
         {
@@ -28,7 +28,7 @@
             },
             "properties": {
                 "OBJECTID": 2,
-                "StationName": "UtrechtZuilen"
+                "StationName": "Utrecht Zuilen"
             }
         },
         {
@@ -43,7 +43,7 @@
             },
             "properties": {
                 "OBJECTID": 3,
-                "StationName": "UtrechtLeidscheRijn"
+                "StationName": "Utrecht Leidsche Rijn"
             }
         },
         {
@@ -58,7 +58,7 @@
             },
             "properties": {
                 "OBJECTID": 4,
-                "StationName": "UtrechtTerwijde"
+                "StationName": "Utrecht Terwijde"
             }
         },
         {
@@ -73,7 +73,7 @@
             },
             "properties": {
                 "OBJECTID": 5,
-                "StationName": "UtrechtCentraal"
+                "StationName": "Utrecht Centraal"
             }
         },
         {
@@ -88,7 +88,7 @@
             },
             "properties": {
                 "OBJECTID": 6,
-                "StationName": "UtrechtVaartscheRijn"
+                "StationName": "Utrecht Vaartsche Rijn"
             }
         },
         {
@@ -103,7 +103,7 @@
             },
             "properties": {
                 "OBJECTID": 7,
-                "StationName": "UtrechtLunetten"
+                "StationName": "Utrecht Lunetten"
             }
         },
         {

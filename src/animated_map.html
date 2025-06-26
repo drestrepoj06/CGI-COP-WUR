@@ -68,18 +68,18 @@
                 }
             }).addTo(map);
 
-            // Render ambulance stations
+            // Render train stations
             L.geoJSON(trainStationsData, {
                 pointToLayer: function (feature, latlng) {
                     const trainStationIcon = L.icon({
                         iconUrl: 'https://raw.githubusercontent.com/drestrepoj06/CGI-COP-WUR/refs/heads/stable/src/vec/train_station.png',
-                        iconSize: [37, 37],
-                        iconAnchor: [16, 16],
-                        popupAnchor: [0, -16]
+                        iconSize: [20, 20],
+                        iconAnchor: [10, 10],
+                        popupAnchor: [0, -12]
                     });
 
                     return L.marker(latlng, { icon: trainStationIcon })
-                        .bindPopup(`🏥 ${feature.properties.StationName}`);
+                        .bindPopup(`🚉 ${feature.properties.StationName}`);
                 }
             }).addTo(map);
 
