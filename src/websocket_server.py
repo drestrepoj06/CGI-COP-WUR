@@ -334,8 +334,7 @@ def reset_all_trains(client):
                     fields_data = {}
 
                     if len(rail_get[1]) >= 2:
-                        fields_data = {rail_get[1][0]
-                            : json.loads(rail_get[1][1])}
+                        fields_data = {rail_get[1][0]: json.loads(rail_get[1][1])}
 
                     if "info" in fields_data and isinstance(fields_data["info"], dict):
                         fields_data["info"]["status"] = True
@@ -420,168 +419,6 @@ def get_trains_within_area(client):
         return []
 
 
-# def mark_random_train_as_inactive(client):
-#     try:
-#         # Get only trains within the visible area
-#         train_ids = get_trains_within_area(client)
-
-#         if not train_ids:
-#             logger.warning("No trains found within the visible area")
-#             return False
-
-#         selected_id = random.choice(train_ids)
-#         logger.info(f"Selected train {selected_id} for incident")
-
-#         response = client.execute_command(
-#             "GET", "train", selected_id, "WITHFIELDS", "OBJECT")
-
-#         if response is None:
-#             raise ValueError(
-#                 f"GET command returned None for train ID {selected_id}")
-
-#         if isinstance(response, list) and len(response) >= 2:
-#             geometry_obj = json.loads(response[0])
-#             info_data = {}
-#             if len(response[1]) >= 2:
-#                 field_key = response[1][0]
-#                 field_value_str = response[1][1]
-#                 info_data = json.loads(field_value_str)
-
-#             info_data["status"] = False
-#             info_data["frozen_coords"] = geometry_obj["coordinates"]
-
-#             train_obj = {
-#                 "ok": True,
-#                 "object": geometry_obj,
-#                 "fields": {
-#                     "info": info_data
-#                 }
-#             }
-#         else:
-#             raise ValueError(f"Unexpected response format: {response}")
-
-#     except Exception as e:
-#         logger.error(
-#             f"Failed to get object for train {selected_id}: {e}", exc_info=True)
-#         return False
-
-#     fields = train_obj["fields"]
-
-#     if "info" in fields and isinstance(fields["info"], dict):
-#         fields["info"]["status"] = False
-#         fields["info"]["frozen_coords"] = train_obj["object"]["coordinates"]
-#     else:
-#         logger.warning(
-#             f"Train {selected_id} does not have expected info structure")
-#         return False
-
-#     try:
-#         geometry_json = json.dumps(train_obj["object"])
-#         fields_args = []
-#         for field_key, field_value in train_obj["fields"].items():
-#             fields_args.extend(["FIELD", field_key, json.dumps(field_value)])
-
-#         set_args = ["SET", "train", selected_id] + \
-#             fields_args + ["OBJECT", geometry_json]
-#         logger.info(f"SET command args: {set_args}")
-#         client.execute_command(*set_args)
-#         logger.info(f"Updated train {selected_id} status to False.")
-
-#         check_response = client.execute_command(
-#             "GET", "train", selected_id, "WITHFIELDS", "OBJECT")
-#         logger.info(f"🔎 Post-update check for {selected_id}: {check_response}")
-
-#         coords = train_obj["object"]["coordinates"]
-#         if train_obj["object"]["type"] != "Point" or len(coords) < 2:
-#             raise ValueError(
-#                 f"Invalid train geometry for proximity search: {coords}")
-
-#         lon, lat = coords[:2]
-#         nearby_response = client.execute_command(
-#             "NEARBY", "railsegment", "POINT", float(lat), float(lon), 1000)
-
-#         rail_ids = []
-#         if isinstance(nearby_response, list) and len(nearby_response) > 1:
-#             results = nearby_response[1]
-#             for item in results:
-#                 if isinstance(item, list) and len(item) >= 1:
-#                     rail_id = item[0]
-#                     if isinstance(rail_id, bytes):
-#                         rail_id = rail_id.decode()
-#                     rail_ids.append(rail_id)
-
-#         logger.info(
-#             f"Found {len(rail_ids)} nearby railsegments within 1 km: {rail_ids}")
-#         affected_segments = []
-
-#         for rail_id in rail_ids:
-#             rail_get = client.execute_command(
-#                 "GET", "railsegment", rail_id, "WITHFIELDS", "OBJECT")
-#             if rail_get is None or len(rail_get) < 2:
-#                 logger.warning(f"Could not retrieve railsegment {rail_id}")
-#                 continue
-
-#             geometry_obj = json.loads(rail_get[0])
-#             fields_data = {}
-#             if len(rail_get[1]) >= 2:
-#                 fields_data = {rail_get[1][0]: json.loads(rail_get[1][1])}
-
-#             fields_data.setdefault("info", {})["status"] = False
-
-#             # SET updated segment in Tile38
-#             field_args = []
-#             for key, value in fields_data.items():
-#                 field_args.extend(["FIELD", key, json.dumps(value)])
-
-#             set_args = ["SET", "railsegment", rail_id] + \
-#                 field_args + ["OBJECT", json.dumps(geometry_obj)]
-#             client.execute_command(*set_args)
-#             logger.info(f"Updated railsegment {rail_id} status to False")
-
-#             # 🚧 Register geofence hook for this segment
-#             clean_id = rail_id
-#             if rail_id.startswith("segment_"):
-#                 clean_id = rail_id[len("segment_"):]
-
-#             hook_name = f"hook_segment_{clean_id}"
-#             channel_name = f"segment_{clean_id}"
-#             hook_endpoint = f"http://localhost:9000/hooks/{channel_name}"
-#             geometry_only = geometry_obj.get("geometry", geometry_obj)
-
-#             try:
-#                 client.execute_command("DELHOOK", hook_name)
-#             except Exception:
-#                 pass  # Ignore if doesn't exist
-
-#             client.execute_command(
-#                 "SETHOOK", hook_name, hook_endpoint,
-#                 "WITHIN", "train",
-#                 "FENCE", "DETECT", "enter",
-#                 "COMMANDS", "set",
-#                 "WHERE", "info.status", "==", "false",
-#                 "OBJECT", json.dumps(geometry_only)
-#             )
-#             logger.info(
-#                 f"📡 Created geofence hook {hook_name} on channel {channel_name}")
-
-#             affected_segments.append({
-#                 "type": "Feature",
-#                 "geometry": geometry_obj,
-#                 "properties": fields_data["info"]
-#             })
-
-#         incident = create_incident(
-#             client, selected_id, train_obj["object"], description="Train marked inactive due to incident")
-
-#         return {
-#             "incident": incident,
-#             "inactive_segments": affected_segments
-#         }
-
-#     except Exception as e:
-#         logger.error(
-#             f"Failed to update train {selected_id}: {e}", exc_info=True)
-#         return None
 
 def mark_random_train_as_inactive(client):
     try:
@@ -615,8 +452,7 @@ def mark_random_train_as_inactive(client):
             "GET", "train", selected_id, "WITHFIELDS", "OBJECT")
 
         if response is None:
-            raise ValueError(
-                f"GET command returned None for train ID {selected_id}")
+            raise ValueError(f"GET command returned None for train ID {selected_id}")
 
         if isinstance(response, list) and len(response) >= 2:
             geometry_obj = json.loads(response[0])
@@ -640,8 +476,7 @@ def mark_random_train_as_inactive(client):
             raise ValueError(f"Unexpected response format: {response}")
 
     except Exception as e:
-        logger.error(
-            f"Failed to get object for train {selected_id}: {e}", exc_info=True)
+        logger.error(f"Failed to get object for train {selected_id}: {e}", exc_info=True)
         return False
 
     try:
@@ -650,8 +485,7 @@ def mark_random_train_as_inactive(client):
         for field_key, field_value in train_obj["fields"].items():
             fields_args.extend(["FIELD", field_key, json.dumps(field_value)])
 
-        set_args = ["SET", "train", selected_id] + \
-            fields_args + ["OBJECT", geometry_json]
+        set_args = ["SET", "train", selected_id] + fields_args + ["OBJECT", geometry_json]
         logger.info(f"SET command args: {set_args}")
         client.execute_command(*set_args)
         logger.info(f"Updated train {selected_id} status to False.")
@@ -662,8 +496,7 @@ def mark_random_train_as_inactive(client):
 
         coords = train_obj["object"]["coordinates"]
         if train_obj["object"]["type"] != "Point" or len(coords) < 2:
-            raise ValueError(
-                f"Invalid train geometry for proximity search: {coords}")
+            raise ValueError(f"Invalid train geometry for proximity search: {coords}")
 
         lon, lat = coords[:2]
         nearby_response = client.execute_command(
@@ -679,8 +512,7 @@ def mark_random_train_as_inactive(client):
                         rail_id = rail_id.decode()
                     rail_ids.append(rail_id)
 
-        logger.info(
-            f"Found {len(rail_ids)} nearby railsegments within 1 km: {rail_ids}")
+        logger.info(f"Found {len(rail_ids)} nearby railsegments within 1 km: {rail_ids}")
         affected_segments = []
 
         for rail_id in rail_ids:
@@ -702,8 +534,7 @@ def mark_random_train_as_inactive(client):
             for key, value in fields_data.items():
                 field_args.extend(["FIELD", key, json.dumps(value)])
 
-            set_args = ["SET", "railsegment", rail_id] + \
-                field_args + ["OBJECT", json.dumps(geometry_obj)]
+            set_args = ["SET", "railsegment", rail_id] + field_args + ["OBJECT", json.dumps(geometry_obj)]
             client.execute_command(*set_args)
             logger.info(f"Updated railsegment {rail_id} status to False")
 
@@ -713,7 +544,7 @@ def mark_random_train_as_inactive(client):
                 clean_id = rail_id[len("segment_"):]
 
             geometry_only = geometry_obj.get("geometry", geometry_obj)
-
+                        
             info_props = fields_data.get("info", {})
             affected_segments.append({
                 "type": "Feature",
@@ -722,28 +553,22 @@ def mark_random_train_as_inactive(client):
             })
 
         # Log how many segments you’re merging
-        logger.info(
-            f"🔀 Merging {len(affected_segments)} affected segments into a single geofence zone.")
+        logger.info(f"🔀 Merging {len(affected_segments)} affected segments into a single geofence zone.")
 
         try:
             shapely_geoms = [shape(f["geometry"]) for f in affected_segments]
             merged_geom = unary_union(shapely_geoms)
-            logger.info(
-                f"✅ Successfully merged geometry type: {merged_geom.geom_type}")
+            logger.info(f"✅ Successfully merged geometry type: {merged_geom.geom_type}")
         except Exception as e:
             logger.error(f"❌ Failed to merge geometries: {e}", exc_info=True)
             return
 
         # Convert to GeoJSON
         try:
-            merged_geojson = json.loads(
-                json.dumps(merged_geom.__geo_interface__))
-            # Truncated for readability
-            logger.info(
-                f"🧾 Merged GeoJSON geometry: {json.dumps(merged_geojson)[:300]}...")
+            merged_geojson = json.loads(json.dumps(merged_geom.__geo_interface__))
+            logger.info(f"🧾 Merged GeoJSON geometry: {json.dumps(merged_geojson)[:300]}...")  # Truncated for readability
         except Exception as e:
-            logger.error(
-                f"❌ Failed to convert merged geometry to GeoJSON: {e}", exc_info=True)
+            logger.error(f"❌ Failed to convert merged geometry to GeoJSON: {e}", exc_info=True)
             return
 
         # Create hooks
@@ -757,11 +582,9 @@ def mark_random_train_as_inactive(client):
                     "COMMANDS", "set",
                     "OBJECT", json.dumps(merged_geojson)
                 )
-                logger.info(
-                    f"📡 Hook created: {hook_name} for collection: {collection}")
+                logger.info(f"📡 Hook created: {hook_name} for collection: {collection}")
             except Exception as e:
-                logger.error(
-                    f"❌ Failed to create geofence hook for {collection}: {e}", exc_info=True)
+                logger.error(f"❌ Failed to create geofence hook for {collection}: {e}", exc_info=True)
 
         # Re-send entities to trigger hooks
         for collection in ["train", "ambulance"]:
@@ -769,8 +592,7 @@ def mark_random_train_as_inactive(client):
                 response = client.execute_command("SCAN", collection)
                 cursor = response[0]
                 items = response[1] if len(response) > 1 else []
-                logger.info(
-                    f"🔄 Resending {len(items)} objects in collection: {collection}")
+                logger.info(f"🔄 Resending {len(items)} objects in collection: {collection}")
 
                 for item in items:
                     entity_id = item[0] if isinstance(item, list) else item
@@ -792,8 +614,7 @@ def mark_random_train_as_inactive(client):
                             try:
                                 fields = json.loads(field_val)
                             except Exception:
-                                logger.warning(
-                                    f"⚠️ Could not parse fields for {entity_id}. Skipping complex values.")
+                                logger.warning(f"⚠️ Could not parse fields for {entity_id}. Skipping complex values.")
                                 fields = {}
 
                         # Start building the SET command
@@ -810,8 +631,7 @@ def mark_random_train_as_inactive(client):
                             fields_json = json.dumps(fields_data)
                             set_args.append(fields_json)
                         except Exception as e:
-                            logger.warning(
-                                f"❌ Failed to JSON-encode fields for {entity_id}: {fields_data} — {e}")
+                            logger.warning(f"❌ Failed to JSON-encode fields for {entity_id}: {fields_data} — {e}")
                             return  # Skip this entity
 
                         # Safely serialize geometry
@@ -820,18 +640,16 @@ def mark_random_train_as_inactive(client):
                             set_args.append("OBJECT")
                             set_args.append(object_json)
                         except Exception as e:
-                            logger.warning(
-                                f"❌ Failed to JSON-encode geometry for {entity_id}: {entity_geometry} — {e}")
+                            logger.warning(f"❌ Failed to JSON-encode geometry for {entity_id}: {entity_geometry} — {e}")
                             return  # Skip this entity
 
                         # Final command
                         client.execute_command(*set_args)
-                        logger.info(
-                            f"📤 Re-set entity {entity_id} in collection {collection}")
+                        logger.info(f"📤 Re-set entity {entity_id} in collection {collection}")
 
             except Exception as e:
-                logger.warning(
-                    f"⚠️ Failed to re-trigger hook for {collection}: {e}", exc_info=True)
+                logger.warning(f"⚠️ Failed to re-trigger hook for {collection}: {e}", exc_info=True)    
+
 
         incident = create_incident(
             client, selected_id, train_obj["object"], description="Train marked inactive due to incident")
@@ -842,10 +660,8 @@ def mark_random_train_as_inactive(client):
         }
 
     except Exception as e:
-        logger.error(
-            f"Failed to update train {selected_id}: {e}", exc_info=True)
+        logger.error(f"Failed to update train {selected_id}: {e}", exc_info=True)
         return None
-
 
 @app.websocket("/ws/scan")
 async def scan_websocket(websocket: WebSocket):
@@ -889,7 +705,7 @@ async def scan_websocket(websocket: WebSocket):
         websocket_connections.discard(websocket)
         await websocket.close()
 
-@app.on_event("startup") 
-def startup_event(): 
-    start_geofence_listener() 
 
+@app.on_event("startup")
+def startup_event():
+    start_geofence_listener()
