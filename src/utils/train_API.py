@@ -18,7 +18,6 @@ end_time = time.time() + duration_minutes * 60
 
 all_data = []
 
-
 def is_within_radius(train):
     coords = train.get("lat"), train.get("lng")
     if None in coords:
