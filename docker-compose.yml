@@ -20,6 +20,12 @@ services:
       timeout: 10s
       retries: 12
       start_period: 30s
+  
+  redis:
+      image: redis:alpine
+      container_name: redis
+      ports:
+        - "6379:6379"
 
   tile38:
       image: tile38/tile38
@@ -35,10 +41,14 @@ services:
         condition: service_healthy
       tile38:
         condition: service_started
+      redis:
+        condition: service_started
     environment:
       KAFKA_BOOTSTRAP_SERVERS: "kafka:9092"
       TILE38_HOST: "tile38"
       TILE38_PORT: "9851"
+      REDIS_HOST: "redis"                   # ✅ Add this
+      REDIS_PORT: "6379" 
     ports:
       - "8501:8501"  # Streamlit UI
       - "8000:8000"  # WebSocket API (e.g., FastAPI)
