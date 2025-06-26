@@ -26,6 +26,7 @@
     <script>
         //__INSERT_RAILS_HERE__   
         //__INSERT_AMBULANCE_STATIONS_HERE__
+        //__INSERT_TRAIN_STATIONS_HERE__
 
         const trainMarkers = {};
         const ambulanceMarkers = {};
@@ -63,6 +64,21 @@
                     });
 
                     return L.marker(latlng, { icon: ambStationIcon })
+                        .bindPopup(`🏥 ${feature.properties.StationName}`);
+                }
+            }).addTo(map);
+
+            // Render ambulance stations
+            L.geoJSON(trainStationsData, {
+                pointToLayer: function (feature, latlng) {
+                    const trainStationIcon = L.icon({
+                        iconUrl: 'https://raw.githubusercontent.com/drestrepoj06/CGI-COP-WUR/refs/heads/stable/src/vec/train_station.png',
+                        iconSize: [37, 37],
+                        iconAnchor: [16, 16],
+                        popupAnchor: [0, -16]
+                    });
+
+                    return L.marker(latlng, { icon: trainStationIcon })
                         .bindPopup(`🏥 ${feature.properties.StationName}`);
                 }
             }).addTo(map);

@@ -5,13 +5,16 @@ def load_map_html(filepath="animated_map.html", route_points=None):
     with open("utils/UtrechtRails.geojson") as f:
         rails = json.load(f)
     with open("utils/AmbulanceStations.geojson") as f:
-        stations = json.load(f)
+        ambulanceStations = json.load(f)
+    with open("utils/UtrechtStations.geojson") as f:
+        trainStations = json.load(f)
 
     route_points_js = json.dumps(route_points or [])
     html = open(filepath).read()
 
     html = html.replace("//__INSERT_RAILS_HERE__", f"const railsData = {json.dumps(rails)};")
-    html = html.replace("//__INSERT_AMBULANCE_STATIONS_HERE__", f"const ambulanceStationsData = {json.dumps(stations)};")
+    html = html.replace("//__INSERT_AMBULANCE_STATIONS_HERE__", f"const ambulanceStationsData = {json.dumps(ambulanceStations)};")
+    html = html.replace("//__INSERT_TRAIN_STATIONS_HERE__", f"const trainStationsData = {json.dumps(trainStations)};")
 
     return html
 
