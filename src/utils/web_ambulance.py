@@ -7,6 +7,9 @@ from streamlit_autorefresh import st_autorefresh
 
 tile38 = redis.Redis(host="tile38", port=9851, decode_responses=True)
 
+redis_client = redis.Redis(host="redis", port=6379, decode_responses=True)
+
+
 def fetch_ambulance_data_from_tile38():
     try:
         cursor, items = tile38.execute_command("SCAN", "ambulance")
