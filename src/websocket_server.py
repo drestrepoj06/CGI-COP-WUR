@@ -17,78 +17,16 @@ from shapely.ops import unary_union
 broadcast_queue = asyncio.Queue()
 websocket_connections = set()
 logger = logging.getLogger("uvicorn")
+
 # Initialize FastAPI and Redis client
 app = FastAPI()
 client = redis.Redis(host="tile38", port=9851, decode_responses=True)
-# Redis client
-# redis_client = redis.Redis(host="localhost", port=9851, decode_responses=True)
 
 redis_client = redis.Redis(
     host=os.getenv("REDIS_HOST", "redis"),
     port=int(os.getenv("REDIS_PORT", 6379)),
     decode_responses=True
 )
-
-# Geofence message handler
-
-
-# def handle_geofence_message(message):
-#     if message["type"] != "message":
-#         return
-
-#     try:
-#         data = json.loads(message["data"])
-
-#         # 1. Push the train ID into Redis alert list
-#         train_id = data.get("object", {}).get(
-#             "id")  # assumes format from Tile38
-#         if train_id:
-#             redis_client.rpush("train_alerts", train_id)
-#             logger.info(
-#                 f"🚨 Geofence triggered by train {train_id}, stored in Redis.")
-
-#         # 2. Broadcast message to WebSocket clients
-#         asyncio.run_coroutine_threadsafe(
-#             broadcast_queue.put({
-#                 "type": "geofence_alert",
-#                 "data": data
-#             }),
-#             asyncio.get_event_loop()
-#         )
-
-#     except Exception as e:
-#         logger.error(f"Error handling geofence event: {e}", exc_info=True)
-
-
-# def start_geofence_listener():
-#     def listen():
-#         pubsub = redis_client.pubsub()
-#         pubsub.psubscribe("segment_*")
-
-#         for message in pubsub.listen():
-#             if message['type'] == 'pmessage':
-#                 channel = message['channel'].decode()
-#                 data = json.loads(message['data'])
-
-#                 # Example format expected from Tile38
-#                 train_id = data.get('id')
-#                 coords = data.get('object', {}).get('coordinates')
-#                 timestamp = datetime.utcnow().isoformat()
-
-#                 # Save it (e.g. in Redis, global list, or send via websocket)
-#                 alert_data = {
-#                     "train_id": train_id,
-#                     "coords": coords,
-#                     "segment": channel,
-#                     "timestamp": timestamp
-#                 }
-
-#                 redis_client.rpush("alert_trains", json.dumps(alert_data))
-#                 logger.info(
-#                     f"🚨 Train {train_id} entered inactive segment {channel}")
-
-#     thread = threading.Thread(target=listen, daemon=True)
-#     thread.start()
 
 
 # Geofence message handler
@@ -939,19 +877,6 @@ async def scan_websocket(websocket: WebSocket):
                 raw_data = {"type": "scan",
                             "collection": collection, "data": all_records}
                 await websocket.send_text(json.dumps(raw_data))
-
-                # # Send any geofence alerts from the broadcast queue
-                # while not broadcast_queue.empty():
-                #     geofence_event = await broadcast_queue.get()
-                #     await websocket.send_text(json.dumps(geofence_event))
-
-                # # PART B: Send list of stored alerting train IDs
-                # train_alert_ids = redis_client.lrange("train_alerts", 0, -1)
-                # if train_alert_ids:
-                #     await websocket.send_text(json.dumps({
-                #         "type": "train_alert_list",
-                #         "data": train_alert_ids
-                #     }))
 
             except Exception as e:
                 await websocket.send_text(json.dumps({"error": f"SCAN failed: {e}"}))
