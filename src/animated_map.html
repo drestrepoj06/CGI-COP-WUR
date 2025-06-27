@@ -17,11 +17,25 @@
             padding: 0;
             font-family: 'Source Sans Pro', sans-serif;
         }
+/* 
+        .time-display {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: white;
+            padding: 5px 10px;
+            border-radius: 3px;
+            box-shadow: 0 0 5px rgba(0,0,0,0.2);
+            z-index: 1000;
+            font-family: 'Source Sans Pro', sans-serif;
+            font-size: 14px;
+        } */
     </style>
 </head>
 
 <body>
     <div id="map"></div>
+    <!-- <div id="timeDisplay" class="time-display">Loading time...</div>  -->
 
     <script>
         //__INSERT_RAILS_HERE__   
@@ -356,6 +370,27 @@
 
             map.invalidateSize();
         }
+        // // // // Code to display time in top right
+        // // // function updateTimeDisplay(timestamp) {
+        // // //     if (!timestamp) return;
+
+        // // //     // Subtract 2 hours to match up to the other times
+        // // //     const adjustedTimestamp = timestamp - 7200000;
+            
+        // // //     const date = new Date(adjustedTimestamp);
+        // // //     const timeString = date.toLocaleTimeString('en-GB', {
+        // // //         hour: '2-digit',
+        // // //         minute: '2-digit'
+        // // //     });
+            
+        // // //     const dateString = date.toLocaleDateString('en-GB', {
+        // // //         day: '2-digit',
+        // // //         month: 'short',
+        // // //         year: 'numeric'
+        // // //     });
+            
+        // // //     document.getElementById('timeDisplay').innerHTML = `${dateString}, ${timeString}`;
+        // // // }
 
         function initAmbulanceWebSocket() {
             const ambulanceSocket = new WebSocket("ws://localhost:8000/ws/scan");
@@ -379,6 +414,17 @@
 
                 if (data.collection === "ambulance") {
                     ambulanceData = data.data || []; // 确保数据不为空
+                    // // // // Code to display time in top right
+                    // // // if (ambulanceData.length > 0) {
+                    // // //     const firstAmbulance = ambulanceData[0];
+                    // // //     try {
+                    // // //         const geojson = JSON.parse(firstAmbulance[1]);
+                    // // //         const timestamp = Number(geojson.coordinates[2]);
+                    // // //         updateTimeDisplay(timestamp);
+                    // // //     } catch (e) {
+                    // // //         console.error("Error parsing ambulance timestamp:", e);
+                    // // //     }
+                    // // // }
                 }
 
                 // 调用 updateAmbulancePositions 时，确保 `ambuPathData` 为空时使用 `[]`
