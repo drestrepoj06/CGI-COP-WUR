@@ -125,6 +125,7 @@ def display_ambulance_alerts():
         logging.error(f"Error loading ambulance alerts: {e}")
         st.error("Could not load ambulance alerts.")
 
+
 def display_train_alerts():
     st.markdown("#### Trains")
 

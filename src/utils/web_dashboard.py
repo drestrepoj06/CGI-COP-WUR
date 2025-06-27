@@ -24,7 +24,6 @@ def render_dashboard():
         st.markdown("#### Geofence Alerts")
         display_ambulance_alerts()
         display_train_alerts()
-        
 
     with col[2]:
         render_map_section()

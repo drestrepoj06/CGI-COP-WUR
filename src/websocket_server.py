@@ -539,9 +539,16 @@ def create_incident(client, train_id, location, description="Incident reported",
         "high": 3,
         "critical": 5
     }
+    expected_resolving_time_map = { 
+        "low": 5, 
+        "moderate": 10, 
+        "high": 20, 
+        "critical": 30 
+    } 
 
     affected_passengers = affected_passengers_map[severity]
     ambulance_units = ambulance_units_map[severity]
+    expected_resolving_time = expected_resolving_time_map[severity] 
     technical_resources = "no"  # Always "no"
 
     if not isinstance(location, dict) or "type" not in location or "coordinates" not in location:
@@ -560,6 +567,7 @@ def create_incident(client, train_id, location, description="Incident reported",
             "FIELD", "affected_passengers", affected_passengers,
             "FIELD", "ambulance_units", ambulance_units,
             "FIELD", "technical_resources", technical_resources,
+            "FIELD", "expected_resolving_time", expected_resolving_time, 
             "OBJECT", geometry_json
         )
 
@@ -574,7 +582,8 @@ def create_incident(client, train_id, location, description="Incident reported",
             "timestamp": incident_time,
             "affected_passengers": affected_passengers,
             "ambulance_units": ambulance_units,
-            "technical_resources": technical_resources
+            "technical_resources": technical_resources,
+            "expected_resolving_time": expected_resolving_time,
         }
     except Exception as e:
         logger.error(
