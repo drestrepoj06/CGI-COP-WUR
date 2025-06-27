@@ -326,8 +326,11 @@ def handle_geofence_message(message):
             data_raw = data_raw.decode()
 
         data = json.loads(data_raw)
-        logger.info(
-            f"📥 Raw geofence data received on {channel}: {json.dumps(data)}")
+        info = data.get("fields", {}).get("info", {})
+        if info.get("status") is False:
+            logger.info(f"🛑 Skipping geofence event for inactive train/ambulance: {info}")
+            return
+        logger.info(f"📥 Raw geofence data received on {channel}: {json.dumps(data)}")
 
         entity_id = data.get("id") or data.get("object", {}).get("id")
         if not entity_id:
@@ -340,8 +343,7 @@ def handle_geofence_message(message):
         collection = match.group(1) if match else None
 
         if not collection:
-            logger.warning(
-                f"⚠️ Could not determine collection from channel: {channel}")
+            logger.warning(f"⚠️ Could not determine collection from channel: {channel}")
             return
 
         key = f"{collection}_alerts"
@@ -356,8 +358,7 @@ def handle_geofence_message(message):
 
         if event == "enter":
             message_text = f"{entity_type} {entity_id} entered the geofenced area."
-            # Reset so "inside" can be sent again
-            redis_client.srem(inside_once_key, entity_id)
+            redis_client.srem(inside_once_key, entity_id)  # Reset so "inside" can be sent again
         elif event == "inside":
             # Only send if not already sent
             if not redis_client.sismember(inside_once_key, entity_id):
@@ -365,8 +366,7 @@ def handle_geofence_message(message):
                 redis_client.sadd(inside_once_key, entity_id)
         elif event == "exit":
             message_text = f"{entity_type} {entity_id} exited the geofenced area."
-            # Reset so next "inside" is allowed
-            redis_client.srem(inside_once_key, entity_id)
+            redis_client.srem(inside_once_key, entity_id)  # Reset so next "inside" is allowed
         else:
             logger.warning(f"⚠️ Unknown event '{event}' on channel: {channel}")
             return
