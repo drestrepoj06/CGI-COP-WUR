@@ -177,11 +177,17 @@
                             Status: ${isStopped ? 'Stopped' : 'Active'}`;
 
                     // Choose icon based on train type and status
+                    const isInGeofence = info.in_geofence === true;
+
                     let iconUrl = '';
                     if (trainType === 'SPR') {
-                        iconUrl = 'https://raw.githubusercontent.com/drestrepoj06/CGI-COP-WUR/refs/heads/main/src/vec/SPR.png';
+                        iconUrl = isInGeofence
+                            ? 'https://raw.githubusercontent.com/drestrepoj06/CGI-COP-WUR/refs/heads/main/src/vec/SPR_geofence.png'
+                            : 'https://raw.githubusercontent.com/drestrepoj06/CGI-COP-WUR/refs/heads/main/src/vec/SPR.png';
                     } else {
-                        iconUrl = 'https://raw.githubusercontent.com/drestrepoj06/CGI-COP-WUR/refs/heads/main/src/vec/IC.png';
+                        iconUrl = isInGeofence
+                            ? 'https://raw.githubusercontent.com/drestrepoj06/CGI-COP-WUR/refs/heads/main/src/vec/IC_geofence.png'
+                            : 'https://raw.githubusercontent.com/drestrepoj06/CGI-COP-WUR/refs/heads/main/src/vec/IC.png';
                     }
 
                     const trainIcon = L.icon({
@@ -197,6 +203,10 @@
                             .bindPopup(popupContent);
                     } else {
                         trainMarkers[id].setLatLng(latlng);
+
+                        // 🔄 Update icon based on geofence status
+                        trainMarkers[id].setIcon(trainIcon);
+
                         if (trainMarkers[id].isPopupOpen()) {
                             trainMarkers[id].getPopup().setContent(popupContent);
                         }
@@ -206,7 +216,6 @@
                 }
             });
         }
-
 
         function initTrainWebSocket() {
             const trainSocket = new WebSocket("ws://localhost:8000/ws/scan");
