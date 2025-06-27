@@ -13,7 +13,7 @@ client = redis.Redis(host="tile38", port=9851, decode_responses=True)
 
 
 def render_dashboard():
-    col = st.columns((2, 5.5, 1), gap="small")
+    col = st.columns((1.5, 1.25, 4.75, 1), gap="small")
 
     with col[0]:
         st.markdown("#### Incident Summary")
@@ -21,12 +21,14 @@ def render_dashboard():
         display_rescue_progress_auto(client)
 
     with col[1]:
+        st.markdown("#### Geofence Alerts")
+        display_ambulance_alerts()
+        display_train_alerts()
+        
+
+    with col[2]:
         render_map_section()
         display_ambulance_availabitity_data()
 
-    with col[2]:
+    with col[3]:
         render_train_controls()
-
-        # Button to manually refresh the alerts
-        display_ambulance_alerts()
-        display_train_alerts()
