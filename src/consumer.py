@@ -25,146 +25,165 @@ tile38 = redis.Redis(host=TILE38_HOST, port=TILE38_PORT, decode_responses=True)
 RAIL_SEGMENTS_JSON_FILE_PATH = "utils/UtrechtRailsSegments.geojson"
 
 
-def process_broken_trains_and_assign_ambulances():
-    dispatched_ambulances = []  # 记录成功派遣的救护车信息
+MAX_RETRIES = 15
+
+
+def get_latest_broken_train():
+    """
+    Scan for broken trains and return the most recent one with required metadata.
+    """
     latest_broken = None
     latest_timestamp = -1
 
-    try:
-        cursor, response = tile38.execute_command("SCAN", "broken_train")
-        if response and isinstance(response, list):
-            for obj in response:
+    cursor, response = tile38.execute_command("SCAN", "broken_train")
+    if response and isinstance(response, list):
+        for obj in response:
+            try:
+                if not (isinstance(obj, list) and len(obj) >= 3):
+                    logging.warning(f"Invalid object: {obj}, skipping.")
+                    continue
+
+                event_id = obj[0]
+                object_id = event_id.split("_")[1]
+
                 try:
-                    # 验证 obj 的结构
-                    if not (isinstance(obj, list) and len(obj) >= 3):
-                        logging.warning(f"Unexpected object structure: {obj}, skipping.")
-                        continue
+                    geojson_obj = json.loads(obj[1])
+                except json.JSONDecodeError as e:
+                    logging.warning(f"Invalid GeoJSON for {event_id}: {e}")
+                    continue
 
-                    # 提取事件 ID
-                    event_id = obj[0]
-                    object_id = event_id.split("_")[1]
+                fields_list = obj[2]
+                if not isinstance(fields_list, list) or len(fields_list) % 2 != 0:
+                    logging.warning(
+                        f"Invalid fields for {event_id}, skipping.")
+                    continue
 
-                    # 提取 GeoJSON 对象
-                    geojson_str = obj[1]
-                    try:
-                        geojson_obj = json.loads(geojson_str)
-                    except json.JSONDecodeError as e:
-                        logging.warning(f"Failed to parse GeoJSON for {event_id}: {e}")
-                        continue
+                fields = dict(zip(fields_list[::2], fields_list[1::2]))
 
-                    # 提取字段列表
-                    fields_list = obj[2]
-                    if not isinstance(fields_list, list) or len(fields_list) % 2 != 0:
-                        logging.warning(f"Invalid fields format for {event_id}: {fields_list}, skipping.")
-                        continue
+                try:
+                    ambulance_count = int(fields.get("ambulance_units", "1"))
+                except ValueError:
+                    ambulance_count = 1
 
-                    # 将字段列表转换为字典
-                    fields_dict = dict(zip(fields_list[::2], fields_list[1::2]))
+                coords = geojson_obj.get("coordinates", [])
+                timestamp = int(coords[2]) if len(coords) > 2 else -1
 
-                    # 提取 ambulance_units，默认为 1
-                    try:
-                        ambulance_count = int(fields_dict.get("ambulance_units", "1"))
-                    except ValueError:
-                        logging.warning(f"Invalid ambulance_units value for {event_id}, defaulting to 1.")
-                        ambulance_count = 1
+                if timestamp > latest_timestamp:
+                    latest_broken = {
+                        "object_id": object_id,
+                        "geojson": geojson_obj,
+                        "lat": coords[1],
+                        "lng": coords[0],
+                        "timestamp": timestamp,
+                        "ambulance_count": ambulance_count
+                    }
+                    latest_timestamp = timestamp
 
-                    # 提取地理信息和时间戳
-                    coords = geojson_obj.get("coordinates", [])
-                    timestamp = int(coords[2]) if len(coords) > 2 else -1
+            except Exception as e:
+                logging.warning(f"Failed to parse train object {obj}: {e}")
 
-                    # 更新最新事件
-                    if timestamp > latest_timestamp:
-                        latest_timestamp = timestamp
-                        latest_broken = {
-                            "object_id": object_id,
-                            "geojson": geojson_obj,
-                            "lat": coords[1],
-                            "lng": coords[0],
-                            "timestamp": timestamp
-                        }
+    return latest_broken
 
-                except Exception as e:
-                    logging.warning(f"Failed to parse broken_train obj {obj}: {e}")
 
-                if latest_broken:
-                    cursor = 0
-                    existing_object_ids = []
-                    while True:
-                        cursor, result = tile38.execute_command(
-                            "SCAN", "ambu_path2train", "MATCH", "*_ambu_*")
-                        objects = result if isinstance(result, list) else []
-                        for obj in objects:
-                            key = obj[0] if isinstance(
-                                obj, list) else obj.get("id", "")
-                            if "_ambu_" in key:
-                                existing_object_id = key.split("_ambu_")[0]
-                                existing_object_ids.append(existing_object_id)
-                        if int(cursor) == 0:
-                            break
+def get_existing_assignments():
+    """
+    Get all ambulance-train assignments to avoid duplicate dispatch.
+    """
+    cursor = 0
+    assigned_ids = []
+    while True:
+        cursor, result = tile38.execute_command(
+            "SCAN", "ambu_path2train", "MATCH", "*_ambu_*")
+        objects = result if isinstance(result, list) else []
+        for obj in objects:
+            key = obj[0] if isinstance(obj, list) else obj.get("id", "")
+            if "_ambu_" in key:
+                assigned_ids.append(key.split("_ambu_")[0])
+        if int(cursor) == 0:
+            break
+    return assigned_ids
 
-                    if latest_broken['object_id'] not in existing_object_ids:
-                        spare_ambu_positions, busy_ambu_positions = fetch_ambulance_positions()
 
-                        ambu_routes = [
-                            {
-                                "ambulance_id": ambu["id"],
-                                "route": get_route((ambu["lat"], ambu["lng"]), (latest_broken["lat"], latest_broken["lng"]))
-                            }
-                            for ambu in spare_ambu_positions
-                        ]
+def assign_ambulances_to_broken_train(broken_info):
+    """
+    Assign one or more ambulances to the given broken train.
+    """
+    dispatched = []
+    spare_ambus, _ = fetch_ambulance_positions()
 
-                        for route_info in ambu_routes:
-                            logging.debug(f"[route check] ambulance {route_info['ambulance_id']} route: {route_info['route']}")
+    routes = [{
+        "ambulance_id": ambu["id"],
+        "route": get_route((ambu["lat"], ambu["lng"]), (broken_info["lat"], broken_info["lng"]))
+    } for ambu in spare_ambus]
 
-                        ambu_routes_sorted = sorted(
-                            ambu_routes,
-                            key=lambda x: x["route"]["routes"][0]["legs"][0]["summary"]["travelTimeInSeconds"]
-                        )
-                        selected_routes = ambu_routes_sorted[:ambulance_count]
+    routes = sorted(
+        routes,
+        key=lambda x: x["route"]["routes"][0]["legs"][0]["summary"]["travelTimeInSeconds"]
+    )
 
-                        for route_info in selected_routes:
-                            ambulance_id = route_info["ambulance_id"]
-                            route_data = route_info["route"]
-                            if not isinstance(route_data, dict):
-                                logging.error(
-                                    f"Route data is not dict for ambulance {ambulance_id}")
-                                continue
-                            leg = route_data["routes"][0]["legs"][0]
-                            route_points = leg["points"]
-                            travel_time = leg["summary"]["travelTimeInSeconds"]
-                            start_timestamp = latest_broken["timestamp"]
-                            timed_points = build_timed_route_points(
-                                route_points, start_timestamp, travel_time)
-                            ambu_path_fields = {
-                                "ambulance_id": ambulance_id,
-                                "travel_time": travel_time,
-                                "route_points_timed": timed_points
-                            }
-                            ambu_path_key = f"{latest_broken['object_id']}_ambu_{ambulance_id}"
-                            existing = tile38.execute_command(
-                                "GET", "ambu_path2train", ambu_path_key)
-                            if not existing:
-                                tile38.execute_command(
-                                    "SET", "ambu_path2train", ambu_path_key,
-                                    "FIELD", "info", json.dumps(ambu_path_fields),
-                                    "OBJECT", json.dumps(latest_broken["geojson"])
-                                )
-                                dispatched_ambulances.append({
-                                    "ambulance_id": ambulance_id,
-                                    "train_id": latest_broken["object_id"],
-                                    "travel_time": travel_time
-                                })
+    for route_info in routes[:broken_info["ambulance_count"]]:
+        ambu_id = route_info["ambulance_id"]
+        route_data = route_info["route"]
+        if not isinstance(route_data, dict):
+            logging.error(f"Invalid route format for {ambu_id}")
+            continue
+        leg = route_data["routes"][0]["legs"][0]
+        points = leg["points"]
+        duration = leg["summary"]["travelTimeInSeconds"]
+        timed_route = build_timed_route_points(
+            points, broken_info["timestamp"], duration)
 
-    except Exception as e:
-        logging.error(
-            f"🚨 Error while scanning and processing broken_train data: {e}")
-        return {"status": "error", "error": str(e), "dispatched": []}
+        path_fields = {
+            "ambulance_id": ambu_id,
+            "travel_time": duration,
+            "route_points_timed": timed_route
+        }
+        ambu_key = f"{broken_info['object_id']}_ambu_{ambu_id}"
+        existing = tile38.execute_command("GET", "ambu_path2train", ambu_key)
+        if not existing:
+            tile38.execute_command(
+                "SET", "ambu_path2train", ambu_key,
+                "FIELD", "info", json.dumps(path_fields),
+                "OBJECT", json.dumps(broken_info["geojson"])
+            )
+            dispatched.append({
+                "ambulance_id": ambu_id,
+                "train_id": broken_info["object_id"],
+                "travel_time": duration
+            })
 
-    return {
-        "status": "success",
-        "train_id": latest_broken["object_id"] if latest_broken else None,
-        "dispatched": dispatched_ambulances
-    }
+    return dispatched
+
+
+def process_broken_trains_and_assign_ambulances():
+    """
+    Main function to process broken train data and assign ambulances, 
+    with automatic retries in case of error.
+    """
+    attempt = 0
+    while attempt < MAX_RETRIES:
+        try:
+            broken = get_latest_broken_train()
+            if not broken:
+                return {"status": "no broken train", "dispatched": []}
+
+            existing_ids = get_existing_assignments()
+            if broken["object_id"] in existing_ids:
+                return {"status": "already dispatched", "train_id": broken["object_id"], "dispatched": []}
+
+            dispatched = assign_ambulances_to_broken_train(broken)
+
+            return {
+                "status": "success",
+                "train_id": broken["object_id"],
+                "dispatched": dispatched
+            }
+
+        except Exception as e:
+            logging.error(f"❌ Attempt {attempt + 1} failed: {e}")
+            attempt += 1
+
+    return {"status": "error", "message": "Failed after multiple attempts."}
 
 
 def store_rail_segments():
@@ -316,7 +335,6 @@ def build_timed_route_points(route_points, start_timestamp, travel_time):
 
 def main():
     store_rail_segments()
-
 
     try:
         consumer = create_kafka_consumer()

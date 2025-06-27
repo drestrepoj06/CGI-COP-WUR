@@ -251,34 +251,54 @@ def handle_geofence_message(message):
         channel = message["channel"]
         data_raw = message["data"]
 
-        # Decode if bytes
         if isinstance(data_raw, bytes):
             data_raw = data_raw.decode()
 
         data = json.loads(data_raw)
-        logger.info(
-            f"📥 Raw geofence data received on {channel}: {json.dumps(data)}")
+        logger.info(f"📥 Raw geofence data received on {channel}: {json.dumps(data)}")
 
         entity_id = data.get("id") or data.get("object", {}).get("id")
         if not entity_id:
             logger.info("⚠️ Skipping geofence message — no entity ID found.")
             return
 
-        # Try to infer collection from the channel
         if isinstance(channel, bytes):
             channel = channel.decode()
         match = re.match(r"(train|ambulance)_alert_zone", channel)
         collection = match.group(1) if match else None
 
+        if not collection:
+            logger.warning(f"⚠️ Could not determine collection from channel: {channel}")
+            return
+
         key = f"{collection}_alerts"
         event = data.get("detect")
+        entity_type = collection.capitalize()
 
-        if event in ["enter", "inside"]:
-            redis_client.sadd(key, entity_id)  # Add to Set
+        # Key to track if "inside" was already sent
+        inside_once_key = f"{collection}_inside_once"
+
+        # Compose custom message
+        message_text = None
+
+        if event == "enter":
+            message_text = f"{entity_type} {entity_id} entered the geofenced area."
+            redis_client.srem(inside_once_key, entity_id)  # Reset so "inside" can be sent again
+        elif event == "inside":
+            # Only send if not already sent
+            if not redis_client.sismember(inside_once_key, entity_id):
+                message_text = f"{entity_type} {entity_id} is inside the geofenced area."
+                redis_client.sadd(inside_once_key, entity_id)
         elif event == "exit":
-            redis_client.srem(key, entity_id)
+            message_text = f"{entity_type} {entity_id} exited the geofenced area."
+            redis_client.srem(inside_once_key, entity_id)  # Reset so next "inside" is allowed
         else:
-            logger.warning(f"⚠️ Unknown collection/channel: {channel}")
+            logger.warning(f"⚠️ Unknown event '{event}' on channel: {channel}")
+            return
+
+        if message_text:
+            redis_client.lpush(key, message_text)
+            redis_client.ltrim(key, 0, 19)  # Keep only latest 20
 
         asyncio.run_coroutine_threadsafe(
             broadcast_queue.put({
