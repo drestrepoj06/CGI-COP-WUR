@@ -40,6 +40,12 @@ def display_rescue_ambu():
 
 def display_stop_button():
     if st.button("🛑 Simulate an incident", key="stop_train_button"):
+        stop_button_action()
+    st.caption("(This stops a random train)")
+
+def stop_button_action():
+    max_retries = 30
+    for attempt in range(max_retries):
         try:
             st.session_state['incident_data'] = None
             st.session_state['button_states']['show_reset_success'] = False
@@ -55,9 +61,6 @@ def display_stop_button():
         except Exception as e:
             logging.error(f"Failed to simulate incident: {e}")
             st.error("An error occurred while simulating an incident.")
-
-    st.caption("(This stops a random train)")
-
 
 def display_reset_button():
     if st.button("🔄 Resolve the incident", key="reset_train_button"):

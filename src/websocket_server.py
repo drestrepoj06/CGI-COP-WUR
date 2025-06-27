@@ -33,32 +33,35 @@ logger = logging.getLogger(__name__)
 
 
 def mark_random_train_as_inactive(client):
-    try:
-        train_ids = get_trains_within_area(client)
-        selected_id = random.choice(train_ids)  # 8843 randomly choose one
-        train_obj = fetch_and_freeze_train(client, selected_id)
+    max_retries = 30
+    for attempt in range(max_retries):
+        try:
+            train_ids = get_trains_within_area(client)
+            selected_id = random.choice(train_ids)  # 8843 randomly choose one
+            train_obj = fetch_and_freeze_train(client, selected_id)
 
-        merged_geojson, affected_segments = update_nearby_segments(
-            client, train_obj)
+            merged_geojson, affected_segments = update_nearby_segments(
+                client, train_obj)
 
-        create_hooks(client, merged_geojson)
-        reemit_entities(client, ["train", "ambulance"])
+            create_hooks(client, merged_geojson)
+            reemit_entities(client, ["train", "ambulance"])
 
-        incident = create_incident(
-            client,
-            selected_id,
-            train_obj["object"],
-            description="Train marked inactive due to incident"
-        )
+            incident = create_incident(
+                client,
+                selected_id,
+                train_obj["object"],
+                description="Train marked inactive due to incident"
+            )
 
-        return {
-            "incident": incident,
-            "inactive_segments": affected_segments
-        }
+            return {
+                "incident": incident,
+                "inactive_segments": affected_segments
+            }
 
-    except Exception as e:
-        logger.error(f"❌ Failed to mark train inactive: {e}", exc_info=True)
-        return None
+        except Exception as e:
+            st.error("❌ Failed to mark train inactive")
+            logger.error(f"❌ Failed to mark train inactive: {e}", exc_info=True)
+            return None
 
 
 def update_nearby_segments(client, train_obj):
