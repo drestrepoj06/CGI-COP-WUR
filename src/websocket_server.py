@@ -7,27 +7,23 @@ import logging
 import datetime
 import threading
 from collections import deque
-
 import os
 import re
 from shapely.geometry import shape, MultiPolygon
 from shapely.ops import unary_union
 
-
 broadcast_queue = asyncio.Queue()
 websocket_connections = set()
 logger = logging.getLogger("uvicorn")
-
 # Initialize FastAPI and Redis client
 app = FastAPI()
 client = redis.Redis(host="tile38", port=9851, decode_responses=True)
-
+# Redis client
 redis_client = redis.Redis(
     host=os.getenv("REDIS_HOST", "redis"),
     port=int(os.getenv("REDIS_PORT", 6379)),
     decode_responses=True
 )
-
 
 # Geofence message handler
 def handle_geofence_message(message):
@@ -43,8 +39,7 @@ def handle_geofence_message(message):
             data_raw = data_raw.decode()
 
         data = json.loads(data_raw)
-        logger.info(
-            f"📥 Raw geofence data received on {channel}: {json.dumps(data)}")
+        logger.info(f"📥 Raw geofence data received on {channel}: {json.dumps(data)}")
 
         entity_id = data.get("id") or data.get("object", {}).get("id")
         if not entity_id:
@@ -80,7 +75,6 @@ def handle_geofence_message(message):
     except Exception as e:
         logger.error(f"❌ Error handling geofence message: {e}", exc_info=True)
 
-
 def start_geofence_listener():
     def listen():
         # Create a new event loop for this thread
@@ -89,8 +83,7 @@ def start_geofence_listener():
 
         pubsub = client.pubsub()  # ✅ use Tile38 client
         pubsub.psubscribe("train_alert_zone", "ambulance_alert_zone")
-        logger.info(
-            "🛰️ Tile38 geofence listener started and subscribed to *_alert_zone channels")
+        logger.info("🛰️ Tile38 geofence listener started and subscribed to *_alert_zone channels")
 
         for message in pubsub.listen():
             logger.info(f"📨 PubSub message received: {message}")
@@ -99,7 +92,6 @@ def start_geofence_listener():
 
     thread = threading.Thread(target=listen, daemon=True)
     thread.start()
-
 
 def fetch_entity_positions(collection: str):
     """
@@ -272,7 +264,6 @@ def create_incident(client, train_id, location, description="Incident reported",
             f"Failed to create incident {incident_id}: {e}", exc_info=True)
         return None
 
-
 def reset_all_trains(client):
     """Reset all trains to active status and clear incidents"""
     try:
@@ -368,56 +359,6 @@ def reset_all_trains(client):
     except Exception as e:
         logging.error(f"Reset failed: {e}")
         return "fail"
-
-
-def get_trains_within_area(client):
-    """
-    Fetches all train IDs that have is_within_area=True from Redis Tile38.
-    """
-
-    try:
-        response = client.execute_command("SCAN", "train")
-        cursor = response[0]
-        items = response[1] if len(response) > 1 else []
-
-        train_ids = []
-        for item in items:
-            try:
-                if isinstance(item, list) and len(item) > 0:
-                    train_id = item[0]
-                    info_str = item[2][1] if len(item) > 2 and isinstance(
-                        item[2], list) and len(item[2]) > 1 else None
-
-                    if info_str:
-                        info_obj = json.loads(info_str)
-                        if info_obj.get("is_within_area") is True:
-                            if isinstance(train_id, bytes):
-                                train_id = train_id.decode()
-                            train_ids.append(train_id)
-                else:
-                    # For non-list items (unlikely case), we need to fetch the full record
-                    train_id = item if isinstance(item, str) else item.decode()
-                    response = client.execute_command(
-                        "GET", "train", train_id, "WITHFIELDS", "OBJECT")
-
-                    if response and len(response) > 1:
-                        info_str = response[1][1] if len(
-                            response[1]) > 1 else None
-                        if info_str:
-                            info_obj = json.loads(info_str)
-                            if info_obj.get("is_within_area") is True:
-                                train_ids.append(train_id)
-            except Exception as e:
-                logger.warning(f"Error processing train item {item}: {e}")
-                continue
-
-        logger.info(f"Found {len(train_ids)} trains within area: {train_ids}")
-        return train_ids
-
-    except Exception as e:
-        logger.error(f"Error scanning trains: {e}", exc_info=True)
-        return []
-
 
 
 def mark_random_train_as_inactive(client):
@@ -538,7 +479,13 @@ def mark_random_train_as_inactive(client):
             client.execute_command(*set_args)
             logger.info(f"Updated railsegment {rail_id} status to False")
 
-            # Append affected segments            
+            # 🚧 Register geofence hook for this segment
+            clean_id = rail_id
+            if rail_id.startswith("segment_"):
+                clean_id = rail_id[len("segment_"):]
+
+            geometry_only = geometry_obj.get("geometry", geometry_obj)
+                        
             info_props = fields_data.get("info", {})
             affected_segments.append({
                 "type": "Feature",
@@ -656,6 +603,7 @@ def mark_random_train_as_inactive(client):
     except Exception as e:
         logger.error(f"Failed to update train {selected_id}: {e}", exc_info=True)
         return None
+    
 
 @app.websocket("/ws/scan")
 async def scan_websocket(websocket: WebSocket):
@@ -684,8 +632,7 @@ async def scan_websocket(websocket: WebSocket):
                         break
 
                 # Send the scanned data
-                raw_data = {"type": "scan",
-                            "collection": collection, "data": all_records}
+                raw_data = {"type": "scan", "collection": collection, "data": all_records}
                 await websocket.send_text(json.dumps(raw_data))
 
             except Exception as e:
@@ -698,7 +645,6 @@ async def scan_websocket(websocket: WebSocket):
     finally:
         websocket_connections.discard(websocket)
         await websocket.close()
-
 
 @app.on_event("startup")
 def startup_event():
