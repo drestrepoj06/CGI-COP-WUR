@@ -28,6 +28,5 @@ def render_dashboard():
         render_train_controls()
 
         # Button to manually refresh the alerts
-        if st.button("Refresh Alerts"):
-            display_ambulance_alerts()
-            display_train_alerts()
+        display_ambulance_alerts()
+        display_train_alerts()
