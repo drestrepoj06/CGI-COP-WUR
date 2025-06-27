@@ -540,7 +540,7 @@ def create_incident(client, train_id, location, description="Incident reported",
         "low": 1,
         "moderate": 2,
         "high": 3,
-        "critical": 5
+        "critical": 4
     }
     expected_resolving_time_map = { 
         "low": 5, 

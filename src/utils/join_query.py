@@ -12,6 +12,8 @@ def scan_broken_train_incidents(client):
     results = {}
     try:
         response = client.execute_command("SCAN", "broken_train")
+
+        # logging.info(f"response: {response}")
         items = response[1] if len(response) > 1 else []
 
         for item in items:
@@ -27,32 +29,40 @@ def scan_broken_train_incidents(client):
             fields_raw = get_response[1]
             fields = dict(zip(fields_raw[::2], fields_raw[1::2]))
 
-            parsed = parse_incident_metadata(object_id, fields)
+            geometry = get_response[0]
+            geometry_obj = json.loads(geometry) if isinstance(geometry, (str, bytes)) else geometry
+
+            parsed = parse_incident_metadata(object_id, fields, geometry_obj)
+            
+            # parsed = parse_incident_metadata(object_id, fields)
             if parsed:
-                results[parsed["incident_id"]] = parsed
+                # results[parsed["incident_id"]] = parsed
+                results[object_id] = parsed 
+
     except Exception as e:
         logging.error(f"Failed to scan broken train: {e}")
     return results
 
 
-def parse_incident_metadata(object_id, fields):
-    """从 Redis 对象 ID 和字段构造结构化事件数据"""
+def parse_incident_metadata(object_id, fields, geometry=None):
     try:
-        incident_id = object_id.split("_")[1]  # e.g., "303143"
-        timestamp_raw = object_id.split("_")[-1][:14]  # e.g., "20250627130615"
-        timestamp = datetime.strptime(timestamp_raw, "%Y%m%d%H%M%S")
+        incident_id = object_id.split("_")[1]
+        ts_ms = int(geometry["coordinates"][2]) if geometry else None
+        start_time = datetime.fromtimestamp(ts_ms / 1000) if ts_ms else None
 
         return {
             "incident_id": incident_id,
-            "start_time": timestamp,
+            "start_time": start_time,
             "affected_passengers": fields.get("affected_passengers"),
             "description": fields.get("description"),
             "expected_resolving_time": int(fields.get("expected_resolving_time", 0)),
-            "status": fields.get("status")
+            "status": fields.get("status"),
+            "severity": fields.get("severity") or "low"
         }
     except Exception as e:
         logging.warning(f"Failed to parse incident {object_id}: {e}")
         return None
+
 
 
 def group_ambulances_by_incident(progress_data):
@@ -65,36 +75,55 @@ def group_ambulances_by_incident(progress_data):
 
 
 def render_incident_block(incident_id, incident_data, ambulances):
-    """渲染一个完整的事件展示块"""
+    severity = str(incident_data.get("severity")).lower()
+    color_map = {
+        "critical": "#ffe6e6",  # light red
+        "high": "#fff2cc",      # light orange
+        "moderate": "#e6f7ff",  # light blue
+        "low": "#f0f0f0"        # light grey
+    }
+    box_color = color_map.get(severity, "#f0f0f0")
+
     latest_eta = max(a["eta"] for a in ambulances)
     resolution_time = datetime.fromtimestamp(latest_eta / 1000) + timedelta(
         minutes=incident_data.get("expected_resolving_time", 0)
     )
 
-    st.markdown("---")
-    st.markdown(f"### 🚨 Incident {incident_id}")
-    st.markdown(
-        f"🕐 **Occurred at**: {incident_data['start_time'].strftime('%Y-%m-%d %H:%M:%S')}")
-    st.markdown(
-        f"👥 **Passengers affected**: {incident_data['affected_passengers']}")
-    st.markdown(f"📋 **Description**: {incident_data['description']}")
-    st.markdown(
-        f"🧩 **Resolution Time Estimate**: {incident_data['expected_resolving_time']} mins")
-    st.markdown(
-        f"✅ **Projected Resolution**: {resolution_time.strftime('%Y-%m-%d %H:%M:%S')}")
-
-    for ambu in ambulances:
-        percent = min(ambu["past_time"] / ambu["travel_time"],
-                      1.0) if ambu["travel_time"] else 0.0
-        remaining = max(ambu["travel_time"] - ambu["past_time"], 0)
-        eta_str = datetime.fromtimestamp(
-            ambu["eta"] / 1000).strftime("%Y-%m-%d %H:%M:%S")
-
+    with st.container():
         st.markdown(
-            f"**🚑 Ambulance {ambu['ambulance_id']}**  \n"
-            f"📅 ETA: {eta_str} | ⏳ Remaining: {int(remaining // 60)}m {int(remaining % 60)}s"
+            f"""
+            <div style="
+                background-color: {box_color};
+                border-left: 6px solid #ff6f61;
+                padding: 15px;
+                margin-bottom: 25px;
+                border-radius: 8px;
+            ">
+            <h4>🚨 Incident {incident_id}</h4>
+            🕐 <b>Occurred at:</b> {incident_data['start_time'].strftime('%Y-%m-%d %H:%M:%S')}<br>
+            👥 <b>Passengers affected:</b> {incident_data['affected_passengers']}<br>
+            📋 <b>Description:</b> {incident_data['description']}<br>
+            💡 <b>Severity:</b> {severity.capitalize()}<br>
+            🧩 <b>Estimated Resolution Time:</b> {incident_data['expected_resolving_time']} mins<br>
+            ✅ <b>Projected Resolution:</b> {resolution_time.strftime('%Y-%m-%d %H:%M:%S')}<br><br>
+            """,
+            unsafe_allow_html=True
         )
-        st.progress(percent)
+
+        for ambu in ambulances:
+            percent = min(ambu["past_time"] / ambu["travel_time"], 1.0) if ambu["travel_time"] else 0.0
+            remaining = max(ambu["travel_time"] - ambu["past_time"], 0)
+            eta_str = datetime.fromtimestamp(ambu["eta"] / 1000).strftime("%Y-%m-%d %H:%M:%S")
+
+            st.markdown(
+                f"<b>🚑 Ambulance {ambu['ambulance_id']}</b><br>"
+                f"📅 ETA: {eta_str} | ⏳ Remaining: {int(remaining // 60)}m {int(remaining % 60)}s<br>",
+                unsafe_allow_html=True
+            )
+            st.progress(percent)
+
+        st.markdown("</div>", unsafe_allow_html=True)
+
 
 
 def display_rescue_progress_auto(client):
@@ -109,13 +138,17 @@ def display_rescue_progress_auto(client):
     all_incidents = scan_broken_train_incidents(client)
 
     for incident_id, ambulances in incident_groups.items():
-        incident_data = all_incidents.get(incident_id)
+        incident_data = next(
+            (data for key, data in all_incidents.items() if incident_id in key), None
+        )
+
+        
+
+        # incident_data = all_incidents.get(incident_id)
         if incident_data:
             render_incident_block(incident_id, incident_data, ambulances)
         else:
             st.warning(f"⚠️ Incident {incident_id} not found in broken_train.")
-
-
 
 
 def get_ambulance_progress(client):
