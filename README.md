@@ -1,10 +1,10 @@
 1. change train/ambu icons in geofence area.
 2. solve problems with create incident button and resolve button.
 3. Severity of geofence rail segment and assign different colors based on that.
-4. Put the scale bar in the map
+4. Put the scale bar in the map (Thijs, done)
 5. Add estimated resolving time, incident info (train index) and release the ambus after that.
 6. Add function that iterates through keys from tomtom.
-7. Add a virtual clock based on average time of the train and ambulance.
+7. Add a virtual clock based on average time of the train and ambulance. (Thijs)
 
 
 
