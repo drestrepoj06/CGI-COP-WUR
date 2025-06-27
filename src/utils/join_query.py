@@ -2,47 +2,120 @@ from streamlit_autorefresh import st_autorefresh
 
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import streamlit as st
 
 
+def scan_broken_train_incidents(client):
+    """扫描 broken_train 获取所有事件数据"""
+    results = {}
+    try:
+        response = client.execute_command("SCAN", "broken_train")
+        items = response[1] if len(response) > 1 else []
+
+        for item in items:
+            object_id = item[0] if isinstance(item, list) else item
+            object_id = object_id.decode() if isinstance(
+                object_id, bytes) else str(object_id)
+
+            get_response = client.execute_command(
+                "GET", "broken_train", object_id, "WITHFIELDS")
+            if not get_response or len(get_response) < 2:
+                continue
+
+            fields_raw = get_response[1]
+            fields = dict(zip(fields_raw[::2], fields_raw[1::2]))
+
+            parsed = parse_incident_metadata(object_id, fields)
+            if parsed:
+                results[parsed["incident_id"]] = parsed
+    except Exception as e:
+        logging.error(f"Failed to scan broken train: {e}")
+    return results
+
+
+def parse_incident_metadata(object_id, fields):
+    """从 Redis 对象 ID 和字段构造结构化事件数据"""
+    try:
+        incident_id = object_id.split("_")[1]  # e.g., "303143"
+        timestamp_raw = object_id.split("_")[-1][:14]  # e.g., "20250627130615"
+        timestamp = datetime.strptime(timestamp_raw, "%Y%m%d%H%M%S")
+
+        return {
+            "incident_id": incident_id,
+            "start_time": timestamp,
+            "affected_passengers": fields.get("affected_passengers"),
+            "description": fields.get("description"),
+            "expected_resolving_time": int(fields.get("expected_resolving_time", 0)),
+            "status": fields.get("status")
+        }
+    except Exception as e:
+        logging.warning(f"Failed to parse incident {object_id}: {e}")
+        return None
+
+
+def group_ambulances_by_incident(progress_data):
+    """将 ambulance 数据按 incident_id 分组"""
+    grouped = {}
+    for ambu in progress_data:
+        incident_id = ambu.get("incident_train_id", "Unknown")
+        grouped.setdefault(incident_id, []).append(ambu)
+    return grouped
+
+
+def render_incident_block(incident_id, incident_data, ambulances):
+    """渲染一个完整的事件展示块"""
+    latest_eta = max(a["eta"] for a in ambulances)
+    resolution_time = datetime.fromtimestamp(latest_eta / 1000) + timedelta(
+        minutes=incident_data.get("expected_resolving_time", 0)
+    )
+
+    st.markdown("---")
+    st.markdown(f"### 🚨 Incident {incident_id}")
+    st.markdown(
+        f"🕐 **Occurred at**: {incident_data['start_time'].strftime('%Y-%m-%d %H:%M:%S')}")
+    st.markdown(
+        f"👥 **Passengers affected**: {incident_data['affected_passengers']}")
+    st.markdown(f"📋 **Description**: {incident_data['description']}")
+    st.markdown(
+        f"🧩 **Resolution Time Estimate**: {incident_data['expected_resolving_time']} mins")
+    st.markdown(
+        f"✅ **Projected Resolution**: {resolution_time.strftime('%Y-%m-%d %H:%M:%S')}")
+
+    for ambu in ambulances:
+        percent = min(ambu["past_time"] / ambu["travel_time"],
+                      1.0) if ambu["travel_time"] else 0.0
+        remaining = max(ambu["travel_time"] - ambu["past_time"], 0)
+        eta_str = datetime.fromtimestamp(
+            ambu["eta"] / 1000).strftime("%Y-%m-%d %H:%M:%S")
+
+        st.markdown(
+            f"**🚑 Ambulance {ambu['ambulance_id']}**  \n"
+            f"📅 ETA: {eta_str} | ⏳ Remaining: {int(remaining // 60)}m {int(remaining % 60)}s"
+        )
+        st.progress(percent)
+
+
 def display_rescue_progress_auto(client):
-    # Refresh every 2 second
     st_autorefresh(interval=2000, key="rescue_polling")
 
     progress_data = get_ambulance_progress(client)
+    if not progress_data:
+        st.info("🚑 No active rescue in progress.")
+        return
 
-    if progress_data:
-        # st.markdown("### ⏱️ Rescue Progress")
-        for ambu in progress_data:
-            ambulance_id = ambu["ambulance_id"]
-            eta = ambu["eta"]
-            travel_time = ambu["travel_time"]
-            past_time = ambu["past_time"]
+    incident_groups = group_ambulances_by_incident(progress_data)
+    all_incidents = scan_broken_train_incidents(client)
 
-            percent = min(past_time / travel_time, 1.0) if travel_time else 0.0
-            remaining_seconds = max(travel_time - past_time, 0)
-
-            # Convert remaining time into minutes and seconds
-            minutes = int(remaining_seconds // 60)
-            seconds = int(remaining_seconds % 60)
-
-            # Format ETA
-            eta_readable = datetime.fromtimestamp(
-                eta / 1000).strftime('%Y-%m-%d %H:%M:%S')
-
-            incident_train_id = ambu.get("incident_train_id", "Unknown")
+    for incident_id, ambulances in incident_groups.items():
+        incident_data = all_incidents.get(incident_id)
+        if incident_data:
+            render_incident_block(incident_id, incident_data, ambulances)
+        else:
+            st.warning(f"⚠️ Incident {incident_id} not found in broken_train.")
 
 
-            st.markdown(
-                f"**🚑 {ambulance_id} — Reporting to ⚠️ {incident_train_id}**  \n"
-                f"📅 ETA: {eta_readable} | ⏳ Remaining: {minutes}m {seconds}s"
-            )
-
-            st.progress(percent)
-    # else:
-    #     st.info("Waiting for ambulance path data...")
 
 
 def get_ambulance_progress(client):
@@ -81,7 +154,7 @@ def get_ambulance_progress(client):
                     logging.warning(
                         f"⚠️ Missing data for {object_id}. Skipping.")
                     continue
-                
+
                 incident_id = str(object_id).split("_")[0]
 
                 geometry = get_response[0]

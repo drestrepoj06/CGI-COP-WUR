@@ -10,7 +10,6 @@ client = redis.Redis(host="tile38", port=9851, decode_responses=True)
 
 
 def clear_ambu_path_and_broken_train(client):
-    """清空 ambu_path2train 和 broken_train 集合"""
     try:
         client.execute_command("DROP", "ambu_path2train")
         logging.info("✅ Cleared ambu_path2train collection.")
@@ -164,23 +163,3 @@ async def calculate_optimal_path(positions):
         ambulance_routes, key=lambda r: r["route_estimated_time"])
 
     return optimal_route
-
-
-# def fetch_and_display_positions():
-#     """
-
-#     Fetch ambulance and broken train positions and display them in the dashboard.
-#     """
-#     positions = fetch_ambu_broken_train_positions()
-#     routes = calculate_optimal_path(positions)
-
-#     st.json(routes)  # Display the fetched data in JSON format
-
-# async def delayed_fetch():
-#     """等待 2 秒后执行 fetch_and_display_positions"""
-#     await asyncio.sleep(2)
-#     await fetch_and_display_positions()
-
-
-#         # Fetch and display positions below the map
-#         asyncio.run(delayed_fetch())
