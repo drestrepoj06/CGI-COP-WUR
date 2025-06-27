@@ -13,4 +13,3 @@ uvicorn
 plotly
 geopy
 streamlit_autorefresh
-itertools
