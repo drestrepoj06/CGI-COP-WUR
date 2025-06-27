@@ -418,36 +418,17 @@ def get_trains_within_area(client):
         logger.error(f"Error scanning trains: {e}", exc_info=True)
         return []
 
-
-
 def mark_random_train_as_inactive(client):
     try:
-        response = client.execute_command("SCAN", "train")
-        cursor = response[0]
-        items = response[1] if len(response) > 1 else []
+        # Get only trains within the visible area
+        train_ids = get_trains_within_area(client)
+        
+        if not train_ids:
+            logger.warning("No trains found within the visible area")
+            return False
 
-        train_ids = []
-        for item in items:
-            if isinstance(item, list) and len(item) > 0:
-                train_id = item[0]
-                if isinstance(train_id, bytes):
-                    train_id = train_id.decode()
-                train_ids.append(train_id)
-            else:
-                if isinstance(item, bytes):
-                    train_ids.append(item.decode())
-                elif isinstance(item, str):
-                    train_ids.append(item)
-
-        logger.info(f"Found {len(train_ids)} trains: {train_ids}")
-
-    except Exception as e:
-        logger.error(f"Error scanning trains: {e}", exc_info=True)
-        return False
-
-    selected_id = random.choice(train_ids)
-
-    try:
+        selected_id = random.choice(train_ids)
+        logger.info(f"Selected train {selected_id} for incident")
         response = client.execute_command(
             "GET", "train", selected_id, "WITHFIELDS", "OBJECT")
 
