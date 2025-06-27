@@ -1,3 +1,4 @@
+from shapely.geometry import shape
 from fastapi import FastAPI, WebSocket
 import json
 import asyncio
@@ -27,6 +28,218 @@ redis_client = redis.Redis(
     port=int(os.getenv("REDIS_PORT", 6379)),
     decode_responses=True
 )
+
+
+logger = logging.getLogger(__name__)
+
+
+def mark_random_train_as_inactive(client):
+    try:
+        # ['1740', '2038', ... all train_ids]
+        train_ids = get_trains_within_area(client)
+        selected_id = random.choice(train_ids)  # 8843 randomly choose one
+        train_obj = fetch_and_freeze_train(client, selected_id)
+        # train_obj: {'ok': True, 'object': {'type': 'Point', # 'coordinates': [5.1420507, 52.06762, 1750761907942]},
+        # 'fields': {'info': {'type': 'SPR', 'speed': 0.0, 'direction': 118.5, 'status': False, 'is_within_area':
+        # True, 'accident_location': None, 'frozen_coords': [5.1420507, 52.06762, 1750761907942]}}}
+        affected_segments = update_nearby_segments(client, train_obj)
+
+        merged_geojson = merge_segments_to_zone(affected_segments)
+        create_hooks(client, merged_geojson)
+        reemit_entities(client, ["train", "ambulance"])
+
+        logging.info(f"train_ids: {train_ids}")
+
+        logging.info(f"affected_segments: {affected_segments}")
+        logging.info(f"merged_geojson: {merged_geojson}")
+
+        incident = create_incident(
+            client,
+            selected_id,
+            train_obj["object"],
+            description="Train marked inactive due to incident"
+        )
+
+        return {
+            "incident": incident,
+            "inactive_segments": affected_segments
+        }
+
+    except Exception as e:
+        logger.error(f"❌ Failed to mark train inactive: {e}", exc_info=True)
+        return None
+
+
+def get_trains_within_area(client):
+    """
+    Returns a list of train IDs with is_within_area=True
+    """
+    try:
+        response = client.execute_command("SCAN", "train")
+        items = response[1] if len(response) > 1 else []
+        train_ids = []
+
+        for item in items:
+            # 取出 ID
+            if isinstance(item, list) and item:
+                train_id = item[0]
+                fields = item[2] if len(item) > 2 else []
+            else:
+                train_id = item
+                fields = None
+
+            if isinstance(train_id, bytes):
+                train_id = train_id.decode()
+
+            info_obj = None
+            try:
+                if fields and isinstance(fields, list) and len(fields) >= 2:
+                    info_obj = json.loads(fields[1])
+                else:
+                    resp = client.execute_command(
+                        "GET", "train", train_id, "WITHFIELDS", "OBJECT")
+                    if resp and len(resp) > 1 and len(resp[1]) >= 2:
+                        info_obj = json.loads(resp[1][1])
+            except Exception as e:
+                logger.warning(f"❌ Error parsing info for {train_id}: {e}")
+
+            if info_obj and info_obj.get("is_within_area") is True:
+                train_ids.append(train_id)
+
+        logger.info(
+            f"✅ Found {len(train_ids)} trains within area: {train_ids}")
+        return train_ids
+
+    except Exception as e:
+        logger.error(f"🚨 Failed to fetch trains in area: {e}", exc_info=True)
+        return []
+
+
+def fetch_and_freeze_train(client, train_id):
+    response = client.execute_command(
+        "GET", "train", train_id, "WITHFIELDS", "OBJECT")
+    if response is None or len(response) < 2:
+        raise ValueError(
+            f"Unexpected train response for ID {train_id}: {response}")
+
+    geometry_obj = json.loads(response[0])
+    field_data = json.loads(response[1][1]) if len(response[1]) >= 2 else {}
+
+    field_data["status"] = False
+    field_data["frozen_coords"] = geometry_obj["coordinates"]
+
+    train_obj = {
+        "ok": True,
+        "object": geometry_obj,
+        "fields": {"info": field_data}
+    }
+
+    # SET updated train back to Tile38
+    args = ["SET", "train", train_id]
+    args += ["FIELD", "info", json.dumps(field_data)]
+    args += ["OBJECT", json.dumps(geometry_obj)]
+    client.execute_command(*args)
+    logger.info(f"🧊 Train {train_id} frozen and updated.")
+
+    return train_obj
+
+
+def update_nearby_segments(client, train_obj):
+    coords = train_obj["object"]["coordinates"]
+    if train_obj["object"]["type"] != "Point" or len(coords) < 2:
+        raise ValueError(f"Invalid train geometry: {coords}")
+
+    lon, lat = coords[:2]
+    response = client.execute_command(
+        "NEARBY", "railsegment", "POINT", lat, lon, 1000)
+    items = response[1] if len(response) > 1 else []
+
+    rail_ids = []
+    for item in items:
+        if isinstance(item, list) and item:
+            rail_id = item[0]
+            if isinstance(rail_id, bytes):
+                rail_id = rail_id.decode()
+            rail_ids.append(rail_id)
+
+    logger.info(f"🛤️ Found {len(rail_ids)} nearby segments.")
+
+    affected = []
+    for rail_id in rail_ids:
+        resp = client.execute_command(
+            "GET", "railsegment", rail_id, "WITHFIELDS", "OBJECT")
+        if not resp or len(resp) < 2:
+            continue
+
+        geom = json.loads(resp[0])
+        fields = json.loads(resp[1][1]) if len(resp[1]) >= 2 else {}
+        fields.setdefault("info", {})["status"] = False
+
+        # Update back to server
+        args = ["SET", "railsegment", rail_id, "FIELD", "info",
+                json.dumps(fields), "OBJECT", json.dumps(geom)]
+        client.execute_command(*args)
+
+        affected.append({
+            "type": "Feature",
+            "geometry": geom,
+            "properties": fields.get("info", {})
+        })
+
+    return affected
+
+
+def merge_segments_to_zone(segments):
+    if not segments:
+        raise ValueError("No segments to merge.")
+
+    shapes = [shape(seg["geometry"]) for seg in segments]
+    merged = unary_union(shapes)
+    geojson = json.loads(json.dumps(merged.__geo_interface__))
+
+    logger.info(f"📐 Merged zone created: {merged.geom_type}")
+    return geojson
+
+
+def create_hooks(client, geojson_zone):
+    for collection in ["train", "ambulance"]:
+        try:
+            hook_name = f"{collection}_alert_zone"
+            client.execute_command(
+                "SETCHAN", hook_name,
+                "WITHIN", collection,
+                "FENCE", "DETECT", "enter, inside, exit",
+                "COMMANDS", "set",
+                "OBJECT", json.dumps(geojson_zone)
+            )
+            logger.info(f"📡 Hook created for {collection}")
+        except Exception as e:
+            logger.warning(f"⚠️ Hook setup failed for {collection}: {e}")
+
+
+def reemit_entities(client, collections):
+    for collection in collections:
+        response = client.execute_command("SCAN", collection)
+        items = response[1] if len(response) > 1 else []
+        logger.info(f"🔁 Re-emitting {len(items)} in {collection}")
+
+        for item in items:
+            entity_id = item[0] if isinstance(item, list) else item
+            if isinstance(entity_id, bytes):
+                entity_id = entity_id.decode()
+
+            resp = client.execute_command(
+                "GET", collection, entity_id, "WITHFIELDS", "OBJECT")
+            if not resp or len(resp) < 2:
+                continue
+
+            geom = json.loads(resp[0])
+            fields = json.loads(resp[1][1]) if len(resp[1]) >= 2 else {}
+
+            args = ["SET", collection, entity_id, "FIELD", "info",
+                    json.dumps(fields), "OBJECT", json.dumps(geom)]
+            client.execute_command(*args)
+            # logger.info(f"🛰️ Resent entity {entity_id} in {collection}")
 
 
 # Geofence message handler
@@ -334,7 +547,8 @@ def reset_all_trains(client):
                     fields_data = {}
 
                     if len(rail_get[1]) >= 2:
-                        fields_data = {rail_get[1][0]: json.loads(rail_get[1][1])}
+                        fields_data = {rail_get[1][0]
+                            : json.loads(rail_get[1][1])}
 
                     if "info" in fields_data and isinstance(fields_data["info"], dict):
                         fields_data["info"]["status"] = True
@@ -369,273 +583,6 @@ def reset_all_trains(client):
         logging.error(f"Reset failed: {e}")
         return "fail"
 
-
-def get_trains_within_area(client):
-    """
-    Fetches all train IDs that have is_within_area=True from Redis Tile38.
-    """
-
-    try:
-        response = client.execute_command("SCAN", "train")
-        cursor = response[0]
-        items = response[1] if len(response) > 1 else []
-
-        train_ids = []
-        for item in items:
-            try:
-                if isinstance(item, list) and len(item) > 0:
-                    train_id = item[0]
-                    info_str = item[2][1] if len(item) > 2 and isinstance(
-                        item[2], list) and len(item[2]) > 1 else None
-
-                    if info_str:
-                        info_obj = json.loads(info_str)
-                        if info_obj.get("is_within_area") is True:
-                            if isinstance(train_id, bytes):
-                                train_id = train_id.decode()
-                            train_ids.append(train_id)
-                else:
-                    # For non-list items (unlikely case), we need to fetch the full record
-                    train_id = item if isinstance(item, str) else item.decode()
-                    response = client.execute_command(
-                        "GET", "train", train_id, "WITHFIELDS", "OBJECT")
-
-                    if response and len(response) > 1:
-                        info_str = response[1][1] if len(
-                            response[1]) > 1 else None
-                        if info_str:
-                            info_obj = json.loads(info_str)
-                            if info_obj.get("is_within_area") is True:
-                                train_ids.append(train_id)
-            except Exception as e:
-                logger.warning(f"Error processing train item {item}: {e}")
-                continue
-
-        logger.info(f"Found {len(train_ids)} trains within area: {train_ids}")
-        return train_ids
-
-    except Exception as e:
-        logger.error(f"Error scanning trains: {e}", exc_info=True)
-        return []
-
-def mark_random_train_as_inactive(client):
-    try:
-        # Get only trains within the visible area
-        train_ids = get_trains_within_area(client)
-        
-        if not train_ids:
-            logger.warning("No trains found within the visible area")
-            return False
-
-        selected_id = random.choice(train_ids)
-        logger.info(f"Selected train {selected_id} for incident")
-        response = client.execute_command(
-            "GET", "train", selected_id, "WITHFIELDS", "OBJECT")
-
-        if response is None:
-            raise ValueError(f"GET command returned None for train ID {selected_id}")
-
-        if isinstance(response, list) and len(response) >= 2:
-            geometry_obj = json.loads(response[0])
-            info_data = {}
-            if len(response[1]) >= 2:
-                field_key = response[1][0]
-                field_value_str = response[1][1]
-                info_data = json.loads(field_value_str)
-
-            info_data["status"] = False
-            info_data["frozen_coords"] = geometry_obj["coordinates"]
-
-            train_obj = {
-                "ok": True,
-                "object": geometry_obj,
-                "fields": {
-                    "info": info_data
-                }
-            }
-        else:
-            raise ValueError(f"Unexpected response format: {response}")
-
-    except Exception as e:
-        logger.error(f"Failed to get object for train {selected_id}: {e}", exc_info=True)
-        return False
-
-    try:
-        geometry_json = json.dumps(train_obj["object"])
-        fields_args = []
-        for field_key, field_value in train_obj["fields"].items():
-            fields_args.extend(["FIELD", field_key, json.dumps(field_value)])
-
-        set_args = ["SET", "train", selected_id] + fields_args + ["OBJECT", geometry_json]
-        logger.info(f"SET command args: {set_args}")
-        client.execute_command(*set_args)
-        logger.info(f"Updated train {selected_id} status to False.")
-
-        check_response = client.execute_command(
-            "GET", "train", selected_id, "WITHFIELDS", "OBJECT")
-        logger.info(f"🔎 Post-update check for {selected_id}: {check_response}")
-
-        coords = train_obj["object"]["coordinates"]
-        if train_obj["object"]["type"] != "Point" or len(coords) < 2:
-            raise ValueError(f"Invalid train geometry for proximity search: {coords}")
-
-        lon, lat = coords[:2]
-        nearby_response = client.execute_command(
-            "NEARBY", "railsegment", "POINT", float(lat), float(lon), 1000)
-
-        rail_ids = []
-        if isinstance(nearby_response, list) and len(nearby_response) > 1:
-            results = nearby_response[1]
-            for item in results:
-                if isinstance(item, list) and len(item) >= 1:
-                    rail_id = item[0]
-                    if isinstance(rail_id, bytes):
-                        rail_id = rail_id.decode()
-                    rail_ids.append(rail_id)
-
-        logger.info(f"Found {len(rail_ids)} nearby railsegments within 1 km: {rail_ids}")
-        affected_segments = []
-
-        for rail_id in rail_ids:
-            rail_get = client.execute_command(
-                "GET", "railsegment", rail_id, "WITHFIELDS", "OBJECT")
-            if rail_get is None or len(rail_get) < 2:
-                logger.warning(f"Could not retrieve railsegment {rail_id}")
-                continue
-
-            geometry_obj = json.loads(rail_get[0])
-            fields_data = {}
-            if len(rail_get[1]) >= 2:
-                fields_data = {rail_get[1][0]: json.loads(rail_get[1][1])}
-
-            fields_data.setdefault("info", {})["status"] = False
-
-            # SET updated segment in Tile38
-            field_args = []
-            for key, value in fields_data.items():
-                field_args.extend(["FIELD", key, json.dumps(value)])
-
-            set_args = ["SET", "railsegment", rail_id] + field_args + ["OBJECT", json.dumps(geometry_obj)]
-            client.execute_command(*set_args)
-            logger.info(f"Updated railsegment {rail_id} status to False")
-                        
-            info_props = fields_data.get("info", {})
-            affected_segments.append({
-                "type": "Feature",
-                "geometry": geometry_obj,
-                "properties": info_props
-            })
-
-        # Log how many segments you’re merging
-        logger.info(f"🔀 Merging {len(affected_segments)} affected segments into a single geofence zone.")
-
-        try:
-            shapely_geoms = [shape(f["geometry"]) for f in affected_segments]
-            merged_geom = unary_union(shapely_geoms)
-            logger.info(f"✅ Successfully merged geometry type: {merged_geom.geom_type}")
-        except Exception as e:
-            logger.error(f"❌ Failed to merge geometries: {e}", exc_info=True)
-            return
-
-        # Convert to GeoJSON
-        try:
-            merged_geojson = json.loads(json.dumps(merged_geom.__geo_interface__))
-            logger.info(f"🧾 Merged GeoJSON geometry: {json.dumps(merged_geojson)[:300]}...")  # Truncated for readability
-        except Exception as e:
-            logger.error(f"❌ Failed to convert merged geometry to GeoJSON: {e}", exc_info=True)
-            return
-
-        # Create hooks
-        for collection in ["train", "ambulance"]:
-            try:
-                hook_name = f"{collection}_alert_zone"
-                client.execute_command(
-                    "SETCHAN", hook_name,
-                    "WITHIN", collection,
-                    "FENCE", "DETECT", "enter, inside, exit",
-                    "COMMANDS", "set",
-                    "OBJECT", json.dumps(merged_geojson)
-                )
-                logger.info(f"📡 Hook created: {hook_name} for collection: {collection}")
-            except Exception as e:
-                logger.error(f"❌ Failed to create geofence hook for {collection}: {e}", exc_info=True)
-
-        # Re-send entities to trigger hooks
-        for collection in ["train", "ambulance"]:
-            try:
-                response = client.execute_command("SCAN", collection)
-                cursor = response[0]
-                items = response[1] if len(response) > 1 else []
-                logger.info(f"🔄 Resending {len(items)} objects in collection: {collection}")
-
-                for item in items:
-                    entity_id = item[0] if isinstance(item, list) else item
-                    if isinstance(entity_id, bytes):
-                        entity_id = entity_id.decode()
-
-                    entity_response = client.execute_command(
-                        "GET", collection, entity_id, "WITHFIELDS", "OBJECT"
-                    )
-
-                    if entity_response and len(entity_response) >= 2:
-                        entity_geometry = json.loads(entity_response[0])
-
-                        # Get field values safely
-                        fields = {}
-                        if len(entity_response[1]) >= 2:
-                            field_key = entity_response[1][0]
-                            field_val = entity_response[1][1]
-                            try:
-                                fields = json.loads(field_val)
-                            except Exception:
-                                logger.warning(f"⚠️ Could not parse fields for {entity_id}. Skipping complex values.")
-                                fields = {}
-
-                        # Start building the SET command
-                        set_args = [
-                            "SET", collection, entity_id,
-                        ]
-
-                        # Safely add field info
-                        set_args.append("FIELD")
-                        set_args.append("info")
-
-                        # Flatten and serialize properly
-                        try:
-                            fields_json = json.dumps(fields_data)
-                            set_args.append(fields_json)
-                        except Exception as e:
-                            logger.warning(f"❌ Failed to JSON-encode fields for {entity_id}: {fields_data} — {e}")
-                            return  # Skip this entity
-
-                        # Safely serialize geometry
-                        try:
-                            object_json = json.dumps(entity_geometry)
-                            set_args.append("OBJECT")
-                            set_args.append(object_json)
-                        except Exception as e:
-                            logger.warning(f"❌ Failed to JSON-encode geometry for {entity_id}: {entity_geometry} — {e}")
-                            return  # Skip this entity
-
-                        # Final command
-                        client.execute_command(*set_args)
-                        logger.info(f"📤 Re-set entity {entity_id} in collection {collection}")
-
-            except Exception as e:
-                logger.warning(f"⚠️ Failed to re-trigger hook for {collection}: {e}", exc_info=True)    
-
-
-        incident = create_incident(
-            client, selected_id, train_obj["object"], description="Train marked inactive due to incident")
-
-        return {
-            "incident": incident,
-            "inactive_segments": affected_segments
-        }
-
-    except Exception as e:
-        logger.error(f"Failed to update train {selected_id}: {e}", exc_info=True)
-        return None
 
 @app.websocket("/ws/scan")
 async def scan_websocket(websocket: WebSocket):
