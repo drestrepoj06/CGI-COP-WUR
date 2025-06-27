@@ -270,12 +270,13 @@ def handle_geofence_message(message):
         match = re.match(r"(train|ambulance)_alert_zone", channel)
         collection = match.group(1) if match else None
 
-        if collection == "train":
-            redis_client.rpush("train_alerts", entity_id)
-            logger.info(f"🚆 Train alert triggered: {entity_id}")
-        elif collection == "ambulance":
-            redis_client.rpush("ambulance_alerts", entity_id)
-            logger.info(f"🚑 Ambulance alert triggered: {entity_id}")
+        key = f"{collection}_alerts"
+        event = data.get("detect")
+
+        if event in ["enter", "inside"]:
+            redis_client.sadd(key, entity_id)  # Add to Set
+        elif event == "exit":
+            redis_client.srem(key, entity_id)
         else:
             logger.warning(f"⚠️ Unknown collection/channel: {channel}")
 
