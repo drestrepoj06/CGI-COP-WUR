@@ -518,13 +518,6 @@ def mark_random_train_as_inactive(client):
             set_args = ["SET", "railsegment", rail_id] + field_args + ["OBJECT", json.dumps(geometry_obj)]
             client.execute_command(*set_args)
             logger.info(f"Updated railsegment {rail_id} status to False")
-
-            # 🚧 Register geofence hook for this segment
-            clean_id = rail_id
-            if rail_id.startswith("segment_"):
-                clean_id = rail_id[len("segment_"):]
-
-            geometry_only = geometry_obj.get("geometry", geometry_obj)
                         
             info_props = fields_data.get("info", {})
             affected_segments.append({
