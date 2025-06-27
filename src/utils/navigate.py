@@ -3,6 +3,7 @@ import asyncio
 import redis
 import logging
 import requests
+from itertools import cycle
 
 logger = logging.getLogger("uvicorn")
 client = redis.Redis(host="tile38", port=9851, decode_responses=True)
@@ -104,17 +105,29 @@ def fetch_broken_trains():
 
 
 
-TOMTOM_API_KEY = "DJfZGAsAfoE8Nsb6KaOZ1UHXlU7z9sR5"
-# btm27pOSiKOd9tq5EHQvJdsdqj4X4q0C
-# DJfZGAsAfoE8Nsb6KaOZ1UHXlU7z9sR5
-# fGPPGPPeZr5bWeBJke1HopjWnkFpk8En
+TOMTOM_API_KEY_LIST = [
+    "DJfZGAsAfoE8Nsb6KaOZ1UHXlU7z9sR5",
+    "fGPPGPPeZr5bWeBJke1HopjWnkFpk8En",
+    "YjyodVbTYnjdjl3JSUzoug3XwpQNuLYi",
+    "vsYoRZiUUGpAvPgLZoehtfQ3mlIVCkwv"
+]
 
+# JFmPPMpbDhq3WVWuP9494g30V7IyMT6b Xiaolu
+# DJfZGAsAfoE8Nsb6KaOZ1UHXlU7z9sR5
+# btm27pOSiKOd9tq5EHQvJdsdqj4X4q0C Biden (DEAD for today)
+
+# YjyodVbTYnjdjl3JSUzoug3XwpQNuLYi Falco Latour
+# fGPPGPPeZr5bWeBJke1HopjWnkFpk8En Oclaf Ruotal
+# vsYoRZiUUGpAvPgLZoehtfQ3mlIVCkwv Mat Mat
+
+API_KEY_ITERATOR = cycle(TOMTOM_API_KEY_LIST)
 
 def get_route(origin, destination):
+    NEXT_API_KEY = next(API_KEY_ITERATOR)
     url = (
         f"https://api.tomtom.com/routing/1/calculateRoute/"
         f"{origin[0]},{origin[1]}:{destination[0]},{destination[1]}/json"
-        f"?key={TOMTOM_API_KEY}&travelMode=car&routeType=fastest"
+        f"?key={NEXT_API_KEY}&travelMode=car&routeType=fastest"
     )
     try:
         r = requests.get(url)
