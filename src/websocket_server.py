@@ -59,7 +59,6 @@ def mark_random_train_as_inactive(client):
             }
 
         except Exception as e:
-            st.error("❌ Failed to mark train inactive")
             logger.error(f"❌ Failed to mark train inactive: {e}", exc_info=True)
             return None
 
@@ -297,6 +296,9 @@ def reemit_entities(client, collections):
         items = response[1] if len(response) > 1 else []
         logger.info(f"🔁 Re-emitting {len(items)} in {collection}")
 
+        # Determine the Redis set that tracks who is in the geofence
+        inside_set_key = f"{collection}_geofence_inside"
+
         for item in items:
             entity_id = item[0] if isinstance(item, list) else item
             if isinstance(entity_id, bytes):
@@ -310,10 +312,17 @@ def reemit_entities(client, collections):
             geom = json.loads(resp[0])
             fields = json.loads(resp[1][1]) if len(resp[1]) >= 2 else {}
 
-            args = ["SET", collection, entity_id, "FIELD", "info",
-                    json.dumps(fields), "OBJECT", json.dumps(geom)]
+            # Determine actual in_geofence status using Redis Set
+            is_inside = redis_client.sismember(inside_set_key, entity_id)
+            fields["in_geofence"] = bool(is_inside)
+
+            args = [
+                "SET", collection, entity_id,
+                "FIELD", "info", json.dumps(fields),
+                "OBJECT", json.dumps(geom)
+            ]
+
             client.execute_command(*args)
-            # logger.info(f"🛰️ Resent entity {entity_id} in {collection}")
 
 
 # Geofence message handler
@@ -333,6 +342,7 @@ def handle_geofence_message(message):
         if info.get("status") is False:
             logger.info(f"🛑 Skipping geofence event for inactive train/ambulance: {info}")
             return
+
         logger.info(f"📥 Raw geofence data received on {channel}: {json.dumps(data)}")
 
         entity_id = data.get("id") or data.get("object", {}).get("id")
@@ -342,42 +352,65 @@ def handle_geofence_message(message):
 
         if isinstance(channel, bytes):
             channel = channel.decode()
+
         match = re.match(r"(train|ambulance)_alert_zone", channel)
         collection = match.group(1) if match else None
-
         if not collection:
             logger.warning(f"⚠️ Could not determine collection from channel: {channel}")
             return
 
         key = f"{collection}_alerts"
+        inside_once_key = f"{collection}_inside_once"        # for dashboard
+        inside_set_key = f"{collection}_geofence_inside"     # for JS icon updates
         event = data.get("detect")
         entity_type = collection.capitalize()
 
-        # Key to track if "inside" was already sent
-        inside_once_key = f"{collection}_inside_once"
-
-        # Compose custom message
         message_text = None
 
         if event == "enter":
+            # 1️⃣ Update geofence state (JS will use this)
+            redis_client.sadd(inside_set_key, entity_id)
+
+            # 2️⃣ Reset dashboard alert logic so "inside" can be shown again
+            redis_client.srem(inside_once_key, entity_id)
+
             message_text = f"{entity_type} {entity_id} entered the geofenced area."
-            redis_client.srem(inside_once_key, entity_id)  # Reset so "inside" can be sent again
+
         elif event == "inside":
-            # Only send if not already sent
+            # 1️⃣ Add to geofence state set
+            redis_client.sadd(inside_set_key, entity_id)
+
+            # 2️⃣ Only show dashboard message once
             if not redis_client.sismember(inside_once_key, entity_id):
-                message_text = f"{entity_type} {entity_id} is inside the geofenced area."
                 redis_client.sadd(inside_once_key, entity_id)
+                message_text = f"{entity_type} {entity_id} is inside the geofenced area."
+
         elif event == "exit":
+            # 1️⃣ Remove from geofence state set
+            redis_client.srem(inside_set_key, entity_id)
+
+            # 2️⃣ Reset alert flag so it can be re-shown on next entry
+            redis_client.srem(inside_once_key, entity_id)
+
             message_text = f"{entity_type} {entity_id} exited the geofenced area."
-            redis_client.srem(inside_once_key, entity_id)  # Reset so next "inside" is allowed
+
         else:
             logger.warning(f"⚠️ Unknown event '{event}' on channel: {channel}")
             return
 
+        # 🔄 Insert the field update here
+        try:
+            in_geofence = event in ("enter", "inside")
+            redis_client.hset(f"{collection}:{entity_id}", "in_geofence", json.dumps(in_geofence))
+            logger.info(f"📝 Stored 'in_geofence' = {in_geofence} for {collection}:{entity_id} in Redis")
+        except Exception as update_error:
+            logger.warning(f"⚠️ Failed to store 'in_geofence' for {entity_id} in Redis: {update_error}")
+
         if message_text:
             redis_client.lpush(key, message_text)
-            redis_client.ltrim(key, 0, 19)  # Keep only latest 20
+            redis_client.ltrim(key, 0, 19)  # Limit stored alerts
 
+        # Still push to broadcast queue
         asyncio.run_coroutine_threadsafe(
             broadcast_queue.put({
                 "type": "geofence_alert",
@@ -621,8 +654,8 @@ def reset_all_trains(client):
 
                 # Reset status and clear accident location
                 fields["status"] = True
-                if "accident_location" in fields:
-                    del fields["accident_location"]
+                fields.pop("in_geofence", None)
+                fields.pop("accident_location", None)
 
                 # Update in Tile38
                 client.execute_command(
@@ -630,7 +663,7 @@ def reset_all_trains(client):
                     "FIELD", "info", json.dumps(fields),
                     "OBJECT", json.dumps(geometry_obj)
                 )
-
+                redis_client.hdel(f"train:{train_id}", "in_geofence")
             except Exception as e:
                 logging.error(f"Error resetting train {train_id}: {e}")
 
@@ -676,9 +709,46 @@ def reset_all_trains(client):
                 except Exception as e:
                     logging.warning(
                         f"⚠️ Could not reset railsegment {rail_id}: {e}")
-
         except Exception as e:
             logging.error(f"❌ Failed to reset railsegments: {e}")
+
+        try:
+            response = client.execute_command("SCAN", "ambulance")
+            cursor = response[0]
+            items = response[1] if len(response) > 1 else []
+
+            for item in items:
+                try:
+                    amb_id = item[0]
+                    response = client.execute_command(
+                        "GET", "ambulance", amb_id, "WITHFIELDS", "OBJECT")
+
+                    if response is None:
+                        continue
+
+                    geometry_obj = json.loads(response[0])
+                    fields = {}
+
+                    if len(response) > 1:
+                        field_key = response[1][0]
+                        field_value_str = response[1][1]
+                        fields = json.loads(field_value_str)
+
+                    # Remove only the in_geofence field if it exists
+                    if "in_geofence" in fields:
+                        fields.pop("in_geofence")
+                        client.execute_command(
+                            "SET", "ambulance", amb_id,
+                            "FIELD", "info", json.dumps(fields),
+                            "OBJECT", json.dumps(geometry_obj)
+                        )
+                        redis_client.hdel(f"ambulance:{amb_id}", "in_geofence")  # <-- Added this
+                        logging.info(f"🧼 Removed 'in_geofence' from ambulance {amb_id}")
+
+                except Exception as e:
+                    logging.warning(f"⚠️ Could not clean ambulance {amb_id}: {e}")
+        except Exception as e:
+            logging.error(f"❌ Failed to scan ambulances: {e}")
 
         # Clear all incidents
         client.execute_command("DROP", "broken_train")
@@ -693,6 +763,7 @@ def reset_all_trains(client):
     except Exception as e:
         logging.error(f"Reset failed: {e}")
         return "fail"
+
 
 
 @app.websocket("/ws/scan")
@@ -713,17 +784,48 @@ async def scan_websocket(websocket: WebSocket):
             cursor = 0
 
             try:
-                # SCAN all objects in the collection
+                # SCAN all object keys in the collection
                 while True:
-                    cursor, response = client.execute_command(
-                        "SCAN", collection, "CURSOR", cursor)
+                    cursor, response = client.execute_command("SCAN", collection, "CURSOR", cursor)
                     all_records.extend(response)
                     if cursor == 0:
                         break
 
-                # Send the scanned data
-                raw_data = {"type": "scan",
-                            "collection": collection, "data": all_records}
+                enriched_records = []
+
+                for item in all_records:
+                    entity_id = item[0] if isinstance(item, list) else item
+                    if isinstance(entity_id, bytes):
+                        entity_id = entity_id.decode()
+
+                    # Get object and fields from Tile38
+                    resp = client.execute_command("GET", collection, entity_id, "WITHFIELDS", "OBJECT")
+                    if not resp or len(resp) < 2:
+                        continue
+
+                    geom = json.loads(resp[0])
+                    fields_raw = resp[1][1] if len(resp[1]) >= 2 else "{}"
+                    fields = json.loads(fields_raw)
+
+                    # Query Redis for the in_geofence flag
+                    redis_key = f"{collection}:{entity_id}"
+                    in_geo_raw = redis_client.hget(redis_key, "in_geofence")
+                    in_geofence = json.loads(in_geo_raw) if in_geo_raw else False
+                    fields["in_geofence"] = in_geofence
+
+                    # Prepare for frontend
+                    enriched_records.append([
+                        entity_id,
+                        json.dumps(geom),
+                        ["info", json.dumps(fields)]
+                    ])
+
+                # Send enriched data to frontend
+                raw_data = {
+                    "type": "scan",
+                    "collection": collection,
+                    "data": enriched_records
+                }
                 await websocket.send_text(json.dumps(raw_data))
 
             except Exception as e:
