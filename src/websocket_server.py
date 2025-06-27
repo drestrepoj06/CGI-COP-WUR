@@ -1,4 +1,3 @@
-from shapely.geometry import shape
 from fastapi import FastAPI, WebSocket
 import json
 import asyncio
@@ -11,7 +10,7 @@ from collections import deque
 
 import os
 import re
-from shapely.geometry import shape, MultiPolygon
+from shapely.geometry import shape, MultiPolygon, Point, mapping
 from shapely.ops import unary_union
 
 
@@ -35,23 +34,15 @@ logger = logging.getLogger(__name__)
 
 def mark_random_train_as_inactive(client):
     try:
-        # ['1740', '2038', ... all train_ids]
         train_ids = get_trains_within_area(client)
         selected_id = random.choice(train_ids)  # 8843 randomly choose one
         train_obj = fetch_and_freeze_train(client, selected_id)
-        # train_obj: {'ok': True, 'object': {'type': 'Point', # 'coordinates': [5.1420507, 52.06762, 1750761907942]},
-        # 'fields': {'info': {'type': 'SPR', 'speed': 0.0, 'direction': 118.5, 'status': False, 'is_within_area':
-        # True, 'accident_location': None, 'frozen_coords': [5.1420507, 52.06762, 1750761907942]}}}
-        affected_segments = update_nearby_segments(client, train_obj)
 
-        merged_geojson = merge_segments_to_zone(affected_segments)
+        merged_geojson, affected_segments = update_nearby_segments(
+            client, train_obj)
+
         create_hooks(client, merged_geojson)
         reemit_entities(client, ["train", "ambulance"])
-
-        logging.info(f"train_ids: {train_ids}")
-
-        logging.info(f"affected_segments: {affected_segments}")
-        logging.info(f"merged_geojson: {merged_geojson}")
 
         incident = create_incident(
             client,
@@ -68,6 +59,86 @@ def mark_random_train_as_inactive(client):
     except Exception as e:
         logger.error(f"❌ Failed to mark train inactive: {e}", exc_info=True)
         return None
+
+
+def update_nearby_segments(client, train_obj):
+    # 1. Extract the train point
+    lon, lat = train_obj["object"]["coordinates"][:2]
+    pt = Point(lon, lat)
+
+    # 2. Use NEARBY to get all candidate railsegment IDs within 800m radius
+    resp = client.execute_command(
+        "NEARBY", "railsegment", "POINT", lat, lon, 800)
+    raw_ids = [item[0].decode() if isinstance(item[0], bytes) else item[0]
+               for item in (resp[1] if len(resp) > 1 else [])
+               if isinstance(item, list) and item]
+    logger.info(f"🛤️ Found {len(raw_ids)} nearby railsegment IDs")
+
+    # 3. Fetch all geometries and cache them into a list
+    segments = []
+    for rail_id in raw_ids:
+        resp = client.execute_command(
+            "GET", "railsegment", rail_id, "WITHFIELDS", "OBJECT")
+        if not resp or len(resp) < 2:
+            continue
+        geom = json.loads(resp[0])
+        fields = json.loads(resp[1][1]) if len(resp[1]) >= 2 else {}
+        segments.append({
+            "id": rail_id,
+            "geometry": geom,
+            "fields": fields
+        })
+
+    if not segments:
+        return []
+
+    # 4. Merge all segment geometries
+    shapes = [shape(seg["geometry"]) for seg in segments]
+    merged = unary_union(shapes)
+
+    # 5. From the merged geometry, find the polygon that contains the train point
+    if merged.geom_type == "MultiPolygon":
+        # Find the first polygon that contains the train point
+        polys = [poly for poly in merged.geoms if poly.contains(pt)]
+        if not polys:
+            raise ValueError(
+                "None of the merged sub-polygons contain the train point")
+        target_poly = polys[0]
+    elif merged.geom_type == "Polygon":
+        target_poly = merged
+    else:
+        raise ValueError(f"Unexpected geom type: {merged.geom_type}")
+
+    # 6. Only mark railsegments that intersect with the target polygon as inactive
+    affected = []
+    for seg in segments:
+        seg_shape = shape(seg["geometry"])
+        if not seg_shape.intersects(target_poly):
+            continue
+
+        # Update status to false
+        info = seg["fields"].setdefault("info", {})
+        info["status"] = False
+
+        # Push update to the server
+        client.execute_command(
+            "SET", "railsegment", seg["id"],
+            "FIELD", "info", json.dumps(info),
+            "OBJECT", json.dumps(seg["geometry"])
+        )
+
+        # Construct a GeoJSON Feature
+        affected.append({
+            "type": "Feature",
+            "geometry": seg["geometry"],
+            "properties": info
+        })
+
+    logger.info(f"🔨 Updated {len(affected)} railsegments to inactive")
+
+    # 7. Return the polygon that contains the train point and affected segments
+    merged_geojson = mapping(target_poly)
+    return merged_geojson, affected
 
 
 def get_trains_within_area(client):
@@ -144,61 +215,61 @@ def fetch_and_freeze_train(client, train_id):
     return train_obj
 
 
-def update_nearby_segments(client, train_obj):
-    coords = train_obj["object"]["coordinates"]
-    if train_obj["object"]["type"] != "Point" or len(coords) < 2:
-        raise ValueError(f"Invalid train geometry: {coords}")
+# def update_nearby_segments(client, train_obj):
+#     coords = train_obj["object"]["coordinates"]
+#     if train_obj["object"]["type"] != "Point" or len(coords) < 2:
+#         raise ValueError(f"Invalid train geometry: {coords}")
 
-    lon, lat = coords[:2]
-    response = client.execute_command(
-        "NEARBY", "railsegment", "POINT", lat, lon, 1000)
-    items = response[1] if len(response) > 1 else []
+#     lon, lat = coords[:2]
+#     response = client.execute_command(
+#         "NEARBY", "railsegment", "POINT", lat, lon, 1000)
+#     items = response[1] if len(response) > 1 else []
 
-    rail_ids = []
-    for item in items:
-        if isinstance(item, list) and item:
-            rail_id = item[0]
-            if isinstance(rail_id, bytes):
-                rail_id = rail_id.decode()
-            rail_ids.append(rail_id)
+#     rail_ids = []
+#     for item in items:
+#         if isinstance(item, list) and item:
+#             rail_id = item[0]
+#             if isinstance(rail_id, bytes):
+#                 rail_id = rail_id.decode()
+#             rail_ids.append(rail_id)
 
-    logger.info(f"🛤️ Found {len(rail_ids)} nearby segments.")
+#     logger.info(f"🛤️ Found {len(rail_ids)} nearby segments.")
 
-    affected = []
-    for rail_id in rail_ids:
-        resp = client.execute_command(
-            "GET", "railsegment", rail_id, "WITHFIELDS", "OBJECT")
-        if not resp or len(resp) < 2:
-            continue
+#     affected = []
+#     for rail_id in rail_ids:
+#         resp = client.execute_command(
+#             "GET", "railsegment", rail_id, "WITHFIELDS", "OBJECT")
+#         if not resp or len(resp) < 2:
+#             continue
 
-        geom = json.loads(resp[0])
-        fields = json.loads(resp[1][1]) if len(resp[1]) >= 2 else {}
-        fields.setdefault("info", {})["status"] = False
+#         geom = json.loads(resp[0])
+#         fields = json.loads(resp[1][1]) if len(resp[1]) >= 2 else {}
+#         fields.setdefault("info", {})["status"] = False
 
-        # Update back to server
-        args = ["SET", "railsegment", rail_id, "FIELD", "info",
-                json.dumps(fields), "OBJECT", json.dumps(geom)]
-        client.execute_command(*args)
+#         # Update back to server
+#         args = ["SET", "railsegment", rail_id, "FIELD", "info",
+#                 json.dumps(fields), "OBJECT", json.dumps(geom)]
+#         client.execute_command(*args)
 
-        affected.append({
-            "type": "Feature",
-            "geometry": geom,
-            "properties": fields.get("info", {})
-        })
+#         affected.append({
+#             "type": "Feature",
+#             "geometry": geom,
+#             "properties": fields.get("info", {})
+#         })
 
-    return affected
+#     return affected
 
 
-def merge_segments_to_zone(segments):
-    if not segments:
-        raise ValueError("No segments to merge.")
+# def merge_segments_to_zone(segments):
+#     if not segments:
+#         raise ValueError("No segments to merge.")
 
-    shapes = [shape(seg["geometry"]) for seg in segments]
-    merged = unary_union(shapes)
-    geojson = json.loads(json.dumps(merged.__geo_interface__))
+#     shapes = [shape(seg["geometry"]) for seg in segments]
+#     merged = unary_union(shapes)
+#     geojson = json.loads(json.dumps(merged.__geo_interface__))
 
-    logger.info(f"📐 Merged zone created: {merged.geom_type}")
-    return geojson
+#     logger.info(f"📐 Merged zone created: {merged.geom_type}")
+#     return geojson
 
 
 def create_hooks(client, geojson_zone):
@@ -255,6 +326,10 @@ def handle_geofence_message(message):
             data_raw = data_raw.decode()
 
         data = json.loads(data_raw)
+        info = data.get("fields", {}).get("info", {})
+        if info.get("status") is False:
+            logger.info(f"🛑 Skipping geofence event for inactive train/ambulance: {info}")
+            return
         logger.info(f"📥 Raw geofence data received on {channel}: {json.dumps(data)}")
 
         entity_id = data.get("id") or data.get("object", {}).get("id")
@@ -568,8 +643,7 @@ def reset_all_trains(client):
                     fields_data = {}
 
                     if len(rail_get[1]) >= 2:
-                        fields_data = {rail_get[1][0]
-                            : json.loads(rail_get[1][1])}
+                        fields_data = {rail_get[1][0]                                       : json.loads(rail_get[1][1])}
 
                     if "info" in fields_data and isinstance(fields_data["info"], dict):
                         fields_data["info"]["status"] = True
@@ -586,7 +660,7 @@ def reset_all_trains(client):
                         *field_args,
                         "OBJECT", json.dumps(geometry_obj)
                     )
-                    logging.info(f"✅ Reactivated railsegment {rail_id}")
+                    # logging.info(f"✅ Reactivated railsegment {rail_id}")
                 except Exception as e:
                     logging.warning(
                         f"⚠️ Could not reset railsegment {rail_id}: {e}")

@@ -107,9 +107,15 @@ def display_incident_summary():
 
 def display_ambulance_alerts():
     st.markdown("#### Ambulances")
+
     try:
         alerts = redis_client.lrange("ambulance_alerts", 0, 19)
+
         if alerts:
+            # Only show count if there are alerts
+            ambu_inside_count = redis_client.scard("ambulance_inside_once")
+            st.info(f"🟨 Ambulances inside geofence: **{ambu_inside_count}**")
+
             for msg in alerts:
                 decoded_msg = msg.decode() if isinstance(msg, bytes) else msg
                 st.warning(f"🚑 {decoded_msg} 🚨")
@@ -119,12 +125,17 @@ def display_ambulance_alerts():
         logging.error(f"Error loading ambulance alerts: {e}")
         st.error("Could not load ambulance alerts.")
 
-
 def display_train_alerts():
     st.markdown("#### Trains")
+
     try:
         alerts = redis_client.lrange("train_alerts", 0, 19)
+
         if alerts:
+            # Only show count if there are alerts
+            train_inside_count = redis_client.scard("train_inside_once")
+            st.info(f"🟦 Trains inside geofence: **{train_inside_count}**")
+
             for msg in alerts:
                 decoded_msg = msg.decode() if isinstance(msg, bytes) else msg
                 st.info(f"🚆 {decoded_msg} 🚨")

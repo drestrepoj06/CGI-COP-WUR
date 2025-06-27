@@ -45,6 +45,13 @@
                 attribution: '© <a href="https://www.mapbox.com/about/maps/">Mapbox</a> © <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>'
             }).addTo(map);
 
+            L.control.scale({
+                imperial: false,
+                metric: true,
+                maxWidth: 200,
+                position: 'bottomleft'
+            }).addTo(map);
+
             L.circle([52.094442, 5.092170], {
                 radius: 6125,
                 color: 'black',
