@@ -1,5 +1,4 @@
-from shapely.geometry import shape, Point, MultiPolygon
-from shapely.ops import unary_union
+from shapely.geometry import shape
 from fastapi import FastAPI, WebSocket
 import json
 import asyncio
@@ -12,6 +11,8 @@ from collections import deque
 
 import os
 import re
+from shapely.geometry import shape, MultiPolygon
+from shapely.ops import unary_union
 
 
 broadcast_queue = asyncio.Queue()
@@ -41,20 +42,15 @@ def mark_random_train_as_inactive(client):
         # train_obj: {'ok': True, 'object': {'type': 'Point', # 'coordinates': [5.1420507, 52.06762, 1750761907942]},
         # 'fields': {'info': {'type': 'SPR', 'speed': 0.0, 'direction': 118.5, 'status': False, 'is_within_area':
         # True, 'accident_location': None, 'frozen_coords': [5.1420507, 52.06762, 1750761907942]}}}
-
         affected_segments = update_nearby_segments(client, train_obj)
 
-        # merged_geojson = merge_segments_to_zone(affected_segments)
-        merged_geojson = merge_segments_to_zone(affected_segments, train_obj)
-
+        merged_geojson = merge_segments_to_zone(affected_segments)
         create_hooks(client, merged_geojson)
         reemit_entities(client, ["train", "ambulance"])
 
         logging.info(f"train_ids: {train_ids}")
 
-        # many separated polygon
         logging.info(f"affected_segments: {affected_segments}")
-        # 1 merged multipolygon
         logging.info(f"merged_geojson: {merged_geojson}")
 
         incident = create_incident(
@@ -193,40 +189,16 @@ def update_nearby_segments(client, train_obj):
     return affected
 
 
-# def merge_segments_to_zone(segments):
-#     if not segments:
-#         raise ValueError("No segments to merge.")
-
-#     shapes = [shape(seg["geometry"]) for seg in segments]
-#     merged = unary_union(shapes)
-#     geojson = json.loads(json.dumps(merged.__geo_interface__))
-
-#     logger.info(f"📐 Merged zone created: {merged.geom_type}")
-#     return geojson
-
-
-def merge_segments_to_zone(segments, train_obj):
+def merge_segments_to_zone(segments):
     if not segments:
         raise ValueError("No segments to merge.")
 
-    train_coords = train_obj["object"]["coordinates"]
-    train_point = Point(train_coords[0], train_coords[1])
     shapes = [shape(seg["geometry"]) for seg in segments]
     merged = unary_union(shapes)
-
-    # 如果结果是 MultiPolygon，找出包含火车位置的那一块
-    if isinstance(merged, MultiPolygon):
-        containing = [poly for poly in merged.geoms if poly.contains(train_point)]
-        if containing:
-            merged = containing[0]
-            logger.info("🎯 Retained only the segment containing the train.")
-        else:
-            logger.warning("⚠️ No polygon contains the train. Keeping full merged geometry.")
-
     geojson = json.loads(json.dumps(merged.__geo_interface__))
-    logger.info(f"📐 Final merged zone geometry type: {merged.geom_type}")
-    return geojson
 
+    logger.info(f"📐 Merged zone created: {merged.geom_type}")
+    return geojson
 
 
 def create_hooks(client, geojson_zone):
@@ -576,7 +548,8 @@ def reset_all_trains(client):
                     fields_data = {}
 
                     if len(rail_get[1]) >= 2:
-                        fields_data = {rail_get[1][0]: json.loads(rail_get[1][1])}
+                        fields_data = {rail_get[1][0]
+                            : json.loads(rail_get[1][1])}
 
                     if "info" in fields_data and isinstance(fields_data["info"], dict):
                         fields_data["info"]["status"] = True
