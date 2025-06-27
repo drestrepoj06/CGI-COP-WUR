@@ -576,6 +576,10 @@ def reset_all_trains(client):
 
         # Clear all incidents
         client.execute_command("DROP", "broken_train")
+        client.execute_command("PDELCHAN", "train_alert_zone")
+        client.execute_command("PDELCHAN", "ambulance_alert_zone")
+        redis_client.delete("train_alerts")
+        redis_client.delete("ambulance_alerts")
         logging.info(
             "✅ All trains reset to active status and incidents cleared!")
         return "success"
