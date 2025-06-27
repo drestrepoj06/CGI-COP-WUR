@@ -25,7 +25,7 @@ tile38 = redis.Redis(host=TILE38_HOST, port=TILE38_PORT, decode_responses=True)
 RAIL_SEGMENTS_JSON_FILE_PATH = "utils/UtrechtRailsSegments.geojson"
 
 
-MAX_RETRIES = 15
+MAX_RETRIES = 50
 
 
 def get_latest_broken_train():
