@@ -103,7 +103,8 @@ def fetch_broken_trains():
     return broken_trains
 
 
-
+# DO NOT READ THIS❗
+# VERY TOP SECRET LIST❗
 TOMTOM_API_KEY_LIST = [
     "DJfZGAsAfoE8Nsb6KaOZ1UHXlU7z9sR5",
     "fGPPGPPeZr5bWeBJke1HopjWnkFpk8En",
