@@ -32,9 +32,12 @@ def display_rescue_progress_auto(client):
             eta_readable = datetime.fromtimestamp(
                 eta / 1000).strftime('%Y-%m-%d %H:%M:%S')
 
+            incident_train_id = ambu.get("incident_train_id", "Unknown")
+
+
             st.markdown(
-                f"**🚑 Ambulance {ambulance_id}**  \n"
-                f"ETA: {eta_readable} | Remaining Time: {minutes}m {seconds}s"
+                f"**🚑 {ambulance_id} — Reporting to ⚠️ {incident_train_id}**  \n"
+                f"📅 ETA: {eta_readable} | ⏳ Remaining: {minutes}m {seconds}s"
             )
 
             st.progress(percent)
@@ -78,6 +81,8 @@ def get_ambulance_progress(client):
                     logging.warning(
                         f"⚠️ Missing data for {object_id}. Skipping.")
                     continue
+                
+                incident_id = str(object_id).split("_")[0]
 
                 geometry = get_response[0]
                 field_data = get_response[1]
@@ -130,6 +135,7 @@ def get_ambulance_progress(client):
                     "past_time": round(past_time, 2),
                     "travel_time": travel_time,
                     "eta": ts_max,
+                    "incident_train_id": incident_id
                 })
 
             except Exception as e:

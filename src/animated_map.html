@@ -17,7 +17,8 @@
             padding: 0;
             font-family: 'Source Sans Pro', sans-serif;
         }
-/* 
+
+
         .time-display {
             position: absolute;
             top: 10px;
@@ -25,17 +26,17 @@
             background: white;
             padding: 5px 10px;
             border-radius: 3px;
-            box-shadow: 0 0 5px rgba(0,0,0,0.2);
+            box-shadow: 0 0 5px rgba(0, 0, 0, 0.2);
             z-index: 1000;
             font-family: 'Source Sans Pro', sans-serif;
             font-size: 14px;
-        } */
+        }
     </style>
 </head>
 
 <body>
     <div id="map"></div>
-    <!-- <div id="timeDisplay" class="time-display">Loading time...</div>  -->
+    <div id="timeDisplay" class="time-display">Loading time...</div> 
 
     <script>
         //__INSERT_RAILS_HERE__   
@@ -112,13 +113,6 @@
                     opacity: 0.8
                 }
             }).addTo(map);
-
-            // L.polyline(routePoints, {
-            //     color: '#FF00FF',  // 浅紫色 (淡紫罗兰)
-            //     weight: 7,         // 线条宽度
-            //     opacity: 0.9       // 设置透明度 (0.0 完全透明 - 1.0 完全不透明)
-            // }).addTo(map);
-
 
             return map;
         }
@@ -347,7 +341,7 @@
                             iconSize: [36, 36],
                             iconAnchor: [10, 10],
                             popupAnchor: [0, -16]
-                    });
+                        });
                     const isAvailableForPopup = info.availability_status === true && info.status === true
                     const statusText = isAvailableForPopup ? '✅ Status: Available' : '❌ Status: Unavailable';
                     const popupContent = `🚑 Ambulance ${id}<br/>⏰ ${formatTimestamp(timestamp)}<br/>${statusText}`
@@ -370,43 +364,38 @@
 
             map.invalidateSize();
         }
-        // // // // Code to display time in top right
-        // // // function updateTimeDisplay(timestamp) {
-        // // //     if (!timestamp) return;
 
-        // // //     // Subtract 2 hours to match up to the other times
-        // // //     const adjustedTimestamp = timestamp - 7200000;
-            
-        // // //     const date = new Date(adjustedTimestamp);
-        // // //     const timeString = date.toLocaleTimeString('en-GB', {
-        // // //         hour: '2-digit',
-        // // //         minute: '2-digit'
-        // // //     });
-            
-        // // //     const dateString = date.toLocaleDateString('en-GB', {
-        // // //         day: '2-digit',
-        // // //         month: 'short',
-        // // //         year: 'numeric'
-        // // //     });
-            
-        // // //     document.getElementById('timeDisplay').innerHTML = `${dateString}, ${timeString}`;
-        // // // }
+        // Code to display time in top right
+        function updateTimeDisplay(timestamp) {
+            if (!timestamp) return;
+
+            // Subtract 2 hours to match up to the other times
+            const adjustedTimestamp = timestamp - 7200000;
+
+            const date = new Date(adjustedTimestamp);
+            const timeString = date.toLocaleTimeString('en-GB', {
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+
+            const dateString = date.toLocaleDateString('en-GB', {
+                day: '2-digit',
+                month: 'short',
+                year: 'numeric'
+            });
+
+            document.getElementById('timeDisplay').innerHTML = `${dateString}, ${timeString}`;
+        }
 
         function initAmbulanceWebSocket() {
             const ambulanceSocket = new WebSocket("ws://localhost:8000/ws/scan");
-            // const ambuPathSocket = new WebSocket("ws://localhost:8000/ws/scan");
-
 
             let ambulanceData = [];
-            let ambuPathData = []; // 默认值为空数组，避免 undefined
+            let ambuPathData = []; //
 
             ambulanceSocket.onopen = () => {
-                ambulanceSocket.send(JSON.stringify({ collection: "ambulance" })); // 请求救护车数据
+                ambulanceSocket.send(JSON.stringify({ collection: "ambulance" }));
             };
-
-            // ambuPathSocket.onopen = () => {
-            //     ambuPathSocket.send(JSON.stringify({ collection: "ambu_path" })); // 请求路径数据
-            // };
 
             ambulanceSocket.onmessage = event => {
                 const data = JSON.parse(event.data);
@@ -414,38 +403,25 @@
 
                 if (data.collection === "ambulance") {
                     ambulanceData = data.data || []; // 确保数据不为空
-                    // // // // Code to display time in top right
-                    // // // if (ambulanceData.length > 0) {
-                    // // //     const firstAmbulance = ambulanceData[0];
-                    // // //     try {
-                    // // //         const geojson = JSON.parse(firstAmbulance[1]);
-                    // // //         const timestamp = Number(geojson.coordinates[2]);
-                    // // //         updateTimeDisplay(timestamp);
-                    // // //     } catch (e) {
-                    // // //         console.error("Error parsing ambulance timestamp:", e);
-                    // // //     }
-                    // // // }
+                    // Code to display time in top right
+                    if (ambulanceData.length > 0) {
+                        const firstAmbulance = ambulanceData[0];
+                        try {
+                            const geojson = JSON.parse(firstAmbulance[1]);
+                            const timestamp = Number(geojson.coordinates[2]);
+                            updateTimeDisplay(timestamp);
+                        } catch (e) {
+                            console.error("Error parsing ambulance timestamp:", e);
+                        }
+                    }
                 }
 
                 // 调用 updateAmbulancePositions 时，确保 `ambuPathData` 为空时使用 `[]`
                 updateAmbulancePositions(ambulanceData, ambuPathData || []);
             };
 
-            // ambuPathSocket.onmessage = event => {
-            //     const data = JSON.parse(event.data);
-            //     // console.log("🛣️ Ambulance Path Data Received:", data);
-
-            //     // 如果收到的数据不包含 `ambu_path`，就忽略更新
-            //     if (data.collection === "ambu_path") {
-            //         ambuPathData = data.data || []; // 确保数据不为空
-            //         updateAmbulancePositions(ambulanceData, ambuPathData);
-            //     } else {
-            //         console.warn("⚠️ 'ambu_path' collection not found, skipping update.");
-            //     }
-            // };
 
             ambulanceSocket.onerror = error => console.error("🚨 Ambulance WebSocket Error:", error);
-            // ambuPathSocket.onerror = error => console.error("🚨 Ambulance Path WebSocket Error:", error);
         }
 
         // Initialize both WebSocket connections

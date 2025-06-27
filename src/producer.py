@@ -8,7 +8,7 @@ import redis
 
 from kafka import KafkaAdminClient, KafkaProducer
 from kafka.admin import NewTopic
-from kafka.errors import KafkaError, TopicAlreadyExistsError
+from kafka.errors import TopicAlreadyExistsError
 
 # Configure logging
 logging.basicConfig(level=logging.INFO,
@@ -158,11 +158,6 @@ def produce_train_messages():
                 }
                 # logging.info(f"📤 Sending train data: {message}")
                 producer.send('train-locations', value=message)
-
-                # # Create geofence if train has stopped
-                # if train['snelheid'] == 0:
-                #     tile38.execute_command(f"SET trains {train['ritId']} POINT {train['lat']} {train['lng']}")
-                #     logging.info(f"🚧 Geofence set for stopped train {train['ritId']} at ({train['lat']}, {train['lng']})")
 
             producer.flush()
             time.sleep(5.6)

@@ -23,44 +23,6 @@ def clear_ambu_path_and_broken_train(client):
         return "fail"
 
 
-# def fetch_ambulance_positions():
-#     """
-#     Fetches ambulance location data and returns only ID and coordinates.
-
-#     Returns:
-#     - List[dict]: A list of dictionaries containing only ambulance ID and coordinates.
-#     """
-#     positions = []
-#     try:
-#         cursor, response = client.execute_command("SCAN", "ambulance")
-#         if not response or not isinstance(response, list) or len(response) < 2:
-#             logger.error(f"Ambulance data not found: {response}")
-#             return positions
-
-#         for obj in response:  # The actual object list
-#             logging.info(f"obj: {obj}")
-#             try:
-#                 ambu_info = json.loads(obj[2][1])  # Ambulance ID (序号)
-#                 ambu_id = ambu_info.get("vehicle_number", [])
-#                 geojson_obj = json.loads(obj[1])  # 解析为 JSON
-#                 coords = geojson_obj.get("coordinates", [])
-
-#                 if len(coords) < 2:
-#                     continue
-
-#                 positions.append({
-#                     "id": ambu_id,
-#                     "lat": coords[1],
-#                     "lng": coords[0]
-#                 })
-#             except Exception as e:
-#                 logger.error(f"Error parsing object {obj}: {e}")
-#     except Exception as e:
-#         logger.error(f"SCAN `ambulance` failed: {e}")
-
-#     return positions
-
-
 def fetch_ambulance_positions():
     """
     Fetches ambulance location data and returns two lists:
@@ -141,31 +103,8 @@ def fetch_broken_trains():
     return broken_trains
 
 
-# async def fetch_ambu_broken_train_positions(websocket=None):
-#     """
-#     Fetches raw ambulance and broken train data without parsing.
 
-#     Parameters:
-#     - websocket (WebSocket, optional): If provided, sends the data via WebSocket.
-
-#     Returns:
-#     - dict: Raw JSON response from Redis.
-#     """
-#     response_data = {
-#         "ambulance": fetch_ambulance_positions(),
-#         "broken_trains": fetch_broken_trains(),
-#     }
-
-#     if websocket:
-#         try:
-#             await websocket.send_text(json.dumps(response_data))
-#         except Exception as e:
-#             logger.error(f"[ERROR] WebSocket transmission error: {e}")
-#             await websocket.close()
-
-#     return response_data
-
-TOMTOM_API_KEY = "btm27pOSiKOd9tq5EHQvJdsdqj4X4q0C"
+TOMTOM_API_KEY = "DJfZGAsAfoE8Nsb6KaOZ1UHXlU7z9sR5"
 # btm27pOSiKOd9tq5EHQvJdsdqj4X4q0C
 # DJfZGAsAfoE8Nsb6KaOZ1UHXlU7z9sR5
 # fGPPGPPeZr5bWeBJke1HopjWnkFpk8En
