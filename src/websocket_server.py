@@ -586,7 +586,7 @@ def reset_all_trains(client):
                         *field_args,
                         "OBJECT", json.dumps(geometry_obj)
                     )
-                    logging.info(f"✅ Reactivated railsegment {rail_id}")
+                    # logging.info(f"✅ Reactivated railsegment {rail_id}")
                 except Exception as e:
                     logging.warning(
                         f"⚠️ Could not reset railsegment {rail_id}: {e}")
