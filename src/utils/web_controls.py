@@ -108,10 +108,11 @@ def display_incident_summary():
 def display_ambulance_alerts():
     st.markdown("#### Ambulances")
     try:
-        alerts = redis_client.smembers("ambulance_alerts")  # Fetch alerts from Redis
+        alerts = redis_client.lrange("ambulance_alerts", 0, 19)
         if alerts:
-            for alert_id in alerts:
-                st.warning(f"🚑 Ambulance {alert_id} 🚨")
+            for msg in alerts:
+                decoded_msg = msg.decode() if isinstance(msg, bytes) else msg
+                st.warning(f"🚑 {decoded_msg} 🚨")
         else:
             st.success("No current ambulance alerts.")
     except Exception as e:
@@ -122,10 +123,11 @@ def display_ambulance_alerts():
 def display_train_alerts():
     st.markdown("#### Trains")
     try:
-        alerts = redis_client.smembers("train_alerts")  # Fetch alerts from Redis
+        alerts = redis_client.lrange("train_alerts", 0, 19)
         if alerts:
-            for alert_id in alerts:
-                st.info(f"🚆 Train {alert_id} 🚨")
+            for msg in alerts:
+                decoded_msg = msg.decode() if isinstance(msg, bytes) else msg
+                st.info(f"🚆 {decoded_msg} 🚨")
         else:
             st.success("No train alerts.")
     except Exception as e:
