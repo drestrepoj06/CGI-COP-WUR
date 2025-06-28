@@ -8,7 +8,7 @@ import streamlit as st
 
 
 def scan_broken_train_incidents(client):
-    """扫描 broken_train 获取所有事件数据"""
+    """Scan broken_train to get all event data"""
     results = {}
     try:
         response = client.execute_command("SCAN", "broken_train")
@@ -66,7 +66,7 @@ def parse_incident_metadata(object_id, fields, geometry=None):
 
 
 def group_ambulances_by_incident(progress_data):
-    """将 ambulance 数据按 incident_id 分组"""
+    """Group the ambulance data by incident_id"""
     grouped = {}
     for ambu in progress_data:
         incident_id = ambu.get("incident_train_id", "Unknown")

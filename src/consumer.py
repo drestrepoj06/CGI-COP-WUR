@@ -209,7 +209,7 @@ def store_rail_segments():
                 "status": True
             }
 
-            # 存储到 Tile38
+            # Save in Tile38
             tile38.execute_command(
                 "SET", "railsegment", f"segment_{object_id}", "FIELD", "info", json.dumps(
                     fields), "OBJECT", geojson_data

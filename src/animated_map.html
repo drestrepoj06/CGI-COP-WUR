@@ -409,7 +409,7 @@
                 console.log("🚑 Ambulance Data Received:", data);
 
                 if (data.collection === "ambulance") {
-                    ambulanceData = data.data || []; // 确保数据不为空
+                    ambulanceData = data.data || []; // Make sure the data is not empty
                     // Code to display time in top right
                     if (ambulanceData.length > 0) {
                         const firstAmbulance = ambulanceData[0];
@@ -423,7 +423,7 @@
                     }
                 }
 
-                // 调用 updateAmbulancePositions 时，确保 `ambuPathData` 为空时使用 `[]`
+                // When calling updateAmbulancePositions, make sure to use `[]` when `ambuPathData` is empty
                 updateAmbulancePositions(ambulanceData, ambuPathData || []);
             };
 

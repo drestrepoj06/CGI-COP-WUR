@@ -109,16 +109,10 @@ TOMTOM_API_KEY_LIST = [
     "DJfZGAsAfoE8Nsb6KaOZ1UHXlU7z9sR5",
     "fGPPGPPeZr5bWeBJke1HopjWnkFpk8En",
     "YjyodVbTYnjdjl3JSUzoug3XwpQNuLYi",
-    "vsYoRZiUUGpAvPgLZoehtfQ3mlIVCkwv"
+    "vsYoRZiUUGpAvPgLZoehtfQ3mlIVCkwv",
+    "btm27pOSiKOd9tq5EHQvJdsdqj4X4q0C",
+    "JFmPPMpbDhq3WVWuP9494g30V7IyMT6b"
 ]
-
-# JFmPPMpbDhq3WVWuP9494g30V7IyMT6b Xiaolu
-# DJfZGAsAfoE8Nsb6KaOZ1UHXlU7z9sR5
-# btm27pOSiKOd9tq5EHQvJdsdqj4X4q0C Biden (DEAD for today)
-
-# YjyodVbTYnjdjl3JSUzoug3XwpQNuLYi Falco Latour
-# fGPPGPPeZr5bWeBJke1HopjWnkFpk8En Oclaf Ruotal
-# vsYoRZiUUGpAvPgLZoehtfQ3mlIVCkwv Mat Mat
 
 API_KEY_ITERATOR = cycle(TOMTOM_API_KEY_LIST)
 
@@ -142,14 +136,14 @@ async def calculate_optimal_path(positions):
     if not positions["broken_trains"]:
         return {}
 
-    # 找出时间戳最大的故障列车
+    # Find the faulty train with the largest timestamp
     broken_trains = positions["broken_trains"]
 
-    # 如果只有一条记录，就直接使用它；否则，用 max 找出时间戳最大的记录
+    # If there is only one record, use it directly; otherwise, use max to find the record with the largest timestamp.
     latest_train = broken_trains[0] if len(broken_trains) == 1 else max(
         broken_trains, key=lambda t: t["timestamp"])
 
-    # 计算每辆救护车到该故障列车的路径
+    # Calculate the path from each ambulance to the faulty train
     ambulance_routes = [
         {
             "timestamp": latest_train["timestamp"],

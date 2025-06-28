@@ -37,7 +37,7 @@ Follow these simple steps to set up the system:
   docker compose up
   ```
 
-🚀 Then open localhost:8501 to start monitoring the lovely Railway Station **Utrecht Centraal**.
+🚀 Then open localhost:8501 to start monitoring the lovely Railway Sytem of **Utrecht**.
 
 ## 🤝 Contributors
 
