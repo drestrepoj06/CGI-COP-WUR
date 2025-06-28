@@ -1,7 +1,7 @@
 import streamlit as st
 from utils.web_map import render_map_section
 from utils.web_controls import render_train_controls, display_incident_summary
-from utils.web_ambulance import display_ambulance_availabitity_data
+from utils.web_ambulance_graphs import display_ambulance_availabitity_data
 from utils.join_query import display_rescue_progress_auto
 
 from utils.web_controls import display_ambulance_alerts, display_train_alerts

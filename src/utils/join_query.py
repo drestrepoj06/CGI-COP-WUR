@@ -98,6 +98,7 @@ def render_incident_block(incident_id, incident_data, ambulances):
                 padding: 15px;
                 margin-bottom: 25px;
                 border-radius: 8px;
+                color: black;
             ">
             <h4>🚨 Incident {incident_id}</h4>
             🕐 <b>Occurred at:</b> {incident_data['start_time'].strftime('%Y-%m-%d %H:%M:%S')}<br>
