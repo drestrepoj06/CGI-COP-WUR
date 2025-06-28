@@ -172,9 +172,7 @@
                     const latlng = [coordinates[1], coordinates[0]];
 
                     const popupContent = `🚆 Train ${id}<br/>
-                            ⏰ ${formatTimestamp(timestamp)}<br/>
-                            Type: ${trainType}<br/>
-                            Status: ${isStopped ? 'Stopped' : 'Active'}`;
+                            ▪️ Type: ${trainType}<br/>`;
 
                     // Choose icon based on train type and status
                     const isInGeofence = info.in_geofence === true;
@@ -353,7 +351,7 @@
                         });
                     const isAvailableForPopup = info.availability_status === true && info.status === true
                     const statusText = isAvailableForPopup ? '✅ Status: Available' : '❌ Status: Unavailable';
-                    const popupContent = `🚑 Ambulance ${id}<br/>⏰ ${formatTimestamp(timestamp)}<br/>${statusText}`
+                    const popupContent = `🚑 Ambulance ${id}<br/>${statusText}`
 
                     if (!ambulanceMarkers[id]) {
                         ambulanceMarkers[id] = L.marker(latlng, { icon: ambulanceIcon })
