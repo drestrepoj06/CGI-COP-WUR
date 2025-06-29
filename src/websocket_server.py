@@ -338,18 +338,8 @@ def handle_geofence_message(message):
             data_raw = data_raw.decode()
 
         data = json.loads(data_raw)
-        info = data.get("fields", {}).get("info", {})
-        if info.get("status") is False:
-            logger.info(f"🛑 Skipping geofence event for inactive train/ambulance: {info}")
-            return
 
-        logger.info(f"📥 Raw geofence data received on {channel}: {json.dumps(data)}")
-
-        entity_id = data.get("id") or data.get("object", {}).get("id")
-        if not entity_id:
-            logger.info("⚠️ Skipping geofence message — no entity ID found.")
-            return
-
+        # 🧠 Get collection before checking 'status'
         if isinstance(channel, bytes):
             channel = channel.decode()
 
@@ -359,46 +349,49 @@ def handle_geofence_message(message):
             logger.warning(f"⚠️ Could not determine collection from channel: {channel}")
             return
 
+        info = data.get("fields", {}).get("info", {})
+
+        # 🚦 Only skip if it's a train with status False
+        if collection == "train" and info.get("status") is False:
+            logger.info(f"🛑 Skipping geofence event for inactive train: {info}")
+            return
+
+        logger.info(f"📥 Raw geofence data received on {channel}: {json.dumps(data)}")
+
+        entity_id = data.get("id") or data.get("object", {}).get("id")
+        if not entity_id:
+            logger.info("⚠️ Skipping geofence message — no entity ID found.")
+            return
+
         key = f"{collection}_alerts"
-        inside_once_key = f"{collection}_inside_once"        # for dashboard
-        inside_set_key = f"{collection}_geofence_inside"     # for JS icon updates
+        inside_once_key = f"{collection}_inside_once"
+        inside_set_key = f"{collection}_geofence_inside"
         event = data.get("detect")
         entity_type = collection.capitalize()
 
         message_text = None
 
         if event == "enter":
-            # 1️⃣ Update geofence state (JS will use this)
             redis_client.sadd(inside_set_key, entity_id)
-
-            # 2️⃣ Reset dashboard alert logic so "inside" can be shown again
             redis_client.srem(inside_once_key, entity_id)
-
             message_text = f"{entity_type} {entity_id} entered the geofenced area."
 
         elif event == "inside":
-            # 1️⃣ Add to geofence state set
             redis_client.sadd(inside_set_key, entity_id)
-
-            # 2️⃣ Only show dashboard message once
             if not redis_client.sismember(inside_once_key, entity_id):
                 redis_client.sadd(inside_once_key, entity_id)
                 message_text = f"{entity_type} {entity_id} is inside the geofenced area."
 
         elif event == "exit":
-            # 1️⃣ Remove from geofence state set
             redis_client.srem(inside_set_key, entity_id)
-
-            # 2️⃣ Reset alert flag so it can be re-shown on next entry
             redis_client.srem(inside_once_key, entity_id)
-
             message_text = f"{entity_type} {entity_id} exited the geofenced area."
 
         else:
             logger.warning(f"⚠️ Unknown event '{event}' on channel: {channel}")
             return
 
-        # 🔄 Insert the field update here
+        # 📝 Update 'in_geofence' field in Redis
         try:
             in_geofence = event in ("enter", "inside")
             redis_client.hset(f"{collection}:{entity_id}", "in_geofence", json.dumps(in_geofence))
@@ -408,9 +401,8 @@ def handle_geofence_message(message):
 
         if message_text:
             redis_client.lpush(key, message_text)
-            redis_client.ltrim(key, 0, 19)  # Limit stored alerts
+            redis_client.ltrim(key, 0, 19)
 
-        # Still push to broadcast queue
         asyncio.run_coroutine_threadsafe(
             broadcast_queue.put({
                 "type": "geofence_alert",
@@ -424,6 +416,7 @@ def handle_geofence_message(message):
 
     except Exception as e:
         logger.error(f"❌ Error handling geofence message: {e}", exc_info=True)
+
 
 
 def start_geofence_listener():
