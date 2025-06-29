@@ -22,23 +22,19 @@ def render_train_controls():
 
 
 def display_rescue_ambu():
-    max_retries = 10
-    for attempt in range(max_retries):
-        if st.button("🚑 Request Ambulances", key="rescue_ambu_button"):
-            try:
-                result = process_broken_trains_and_assign_ambulances()
-                if result["status"] == "success":
-                    st.session_state["tqdm"] = True
-                    st.rerun()
-                else:
-                    st.error("Dispatch failed: " +
-                            result.get("error", "Unknown reason"))
-            except Exception as e:
-                logging.error(f"Rescue dispatch failed: {e}")
-                st.error("An error occurred while requesting ambulances.")
+    if st.button("🚑 Request Ambulances", key="rescue_ambu_button"):
+        try:
+            result = process_broken_trains_and_assign_ambulances()
+            if result["status"] == "success":
+                st.session_state["tqdm"] = True
+                st.rerun()
+            else:
+                st.error("Dispatch failed: " + result.get("error", "Unknown reason"))
+        except Exception as e:
+            logging.error(f"Rescue dispatch failed: {e}")
+            st.error("An error occurred while requesting ambulances.")
 
     st.caption("(This requests ambulance(s))")
-
 
 def display_stop_button():
     if st.button("🛑 Simulate an incident", key="stop_train_button"):
