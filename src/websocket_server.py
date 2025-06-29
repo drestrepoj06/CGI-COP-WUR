@@ -13,6 +13,12 @@ import re
 from shapely.geometry import shape, MultiPolygon, Point, mapping
 from shapely.ops import unary_union
 
+from math import radians, cos
+
+
+def degree_distance_to_meters(lat, d):
+    return d * 111_320 * cos(radians(lat))
+
 
 broadcast_queue = asyncio.Queue()
 websocket_connections = set()
@@ -45,6 +51,9 @@ def mark_random_train_as_inactive(client):
 
             merged_geojson, affected_segments = update_nearby_segments(
                 client, train_obj)
+
+            # affected_segments: [{'type': 'Feature', 'geometry': {'type': 'Polygon', 'coordinates': [[[5.112151791000031, 52.08504017900003], [5.116304752000076, 52.08082499200003], [5.116308175000029, 52.08082180300005], [5.116308509000021, 52.08082160600003], [5.1163089660000765, 52.08082147400006], [5.116309342000022, 52.08082144000008], [5.116309718000025, 52.08082147400006]]]}, 'properties': {'status': False}}, {'type': 'Feature', 'geometry': {'type': 'Polygon', 'coordinates': [[[5.108175876000075, 52.08935882700007],[5.108174443000053, 52.089358910000044], [5.108174900000051, 52.089358778000076], [5.108175403000075, 52.08935875100008], [5.108175876000075, 52.08935882700007]]]}, 'properties': {'status': False}}]
+            # train_obj: {'ok': True, 'object': {'type': 'Point', 'coordinates': [5.16484, 52.119564, 1750761950418]}, 'fields': {'info': {'type': 'SPR', 'speed': 133.2, 'direction': 247.7, 'status': False, 'is_within_area': True, 'accident_location': None, 'frozen_coords': [5.16484, 52.119564, 1750761950418]}}}
 
             new_geom = shape(merged_geojson)
             if global_merged_geojson:
@@ -84,9 +93,9 @@ def update_nearby_segments(client, train_obj):
     lon, lat = train_obj["object"]["coordinates"][:2]
     pt = Point(lon, lat)
 
-    # 2. Use NEARBY to get all candidate railsegment IDs within 800m radius
+    # 2. Use NEARBY to get all candidate railsegment IDs within 1000m radius
     resp = client.execute_command(
-        "NEARBY", "railsegment", "POINT", lat, lon, 800)
+        "NEARBY", "railsegment", "POINT", lat, lon, 1000)
     raw_ids = [item[0].decode() if isinstance(item[0], bytes) else item[0]
                for item in (resp[1] if len(resp) > 1 else [])
                if isinstance(item, list) and item]
@@ -142,6 +151,20 @@ def update_nearby_segments(client, train_obj):
         client.execute_command(
             "SET", "railsegment", seg["id"],
             "FIELD", "info", json.dumps(info),
+            "OBJECT", json.dumps(seg["geometry"])
+        )
+
+        # ✅ Compute distance and write into geofence_seg
+        distance_deg = pt.distance(seg_shape)
+        distance_m = degree_distance_to_meters(lat, distance_deg)
+
+        geofence_info = {
+            "distance_from_train": distance_m
+        }
+
+        client.execute_command(
+            "SET", "geofence_seg", seg["id"],
+            "FIELD", "info", json.dumps(geofence_info),
             "OBJECT", json.dumps(seg["geometry"])
         )
 
@@ -317,7 +340,7 @@ def handle_geofence_message(message):
 
         logger.info(
             f"📥 Geofence triggered by incident {incident_id}, entity {entity_id} on channel {channel}")
-        
+
         key = f"{collection}_alerts"
         inside_once_key = f"{collection}_inside_once"
         inside_set_key = f"{collection}_geofence_inside"
@@ -714,8 +737,7 @@ def reset_all_trains(client):
                     fields_data = {}
 
                     if len(rail_get[1]) >= 2:
-                        fields_data = {rail_get[1][0]
-                            : json.loads(rail_get[1][1])}
+                        fields_data = {rail_get[1][0]                            : json.loads(rail_get[1][1])}
 
                     if "info" in fields_data and isinstance(fields_data["info"], dict):
                         fields_data["info"]["status"] = True
@@ -784,8 +806,11 @@ def reset_all_trains(client):
         client.execute_command("DROP", "broken_train")
         client.execute_command("PDELCHAN", "train_alert_zone")
         client.execute_command("PDELCHAN", "ambulance_alert_zone")
+
         client.execute_command("PDELCHAN", "train_alert_zone_*")
         client.execute_command("PDELCHAN", "ambulance_alert_zone_*")
+
+        client.execute_command("DROP", "geofence_seg")
 
         global global_merged_geojson
         global_merged_geojson = None
@@ -865,6 +890,90 @@ async def scan_websocket(websocket: WebSocket):
                     "data": enriched_records
                 }
                 await websocket.send_text(json.dumps(raw_data))
+
+            except Exception as e:
+                await websocket.send_text(json.dumps({"error": f"SCAN failed: {e}"}))
+
+            await asyncio.sleep(1)
+
+    except Exception as e:
+        logger.error(f"WebSocket error: {e}")
+    finally:
+        websocket_connections.discard(websocket)
+        await websocket.close()
+
+
+
+@app.websocket("/ws/scan_filter")
+async def scan_websocket_filter(websocket: WebSocket):
+    await websocket.accept()
+    websocket_connections.add(websocket)
+
+    try:
+        request_data = await websocket.receive_text()
+        collection = json.loads(request_data).get("collection")
+
+        if not collection:
+            await websocket.send_text(json.dumps({"error": "Invalid collection name"}))
+            return
+
+        previous_snapshot = {}
+
+        while True:
+            all_records = []
+            cursor = 0
+
+            try:
+                # SCAN all object keys in the collection
+                while True:
+                    cursor, response = client.execute_command(
+                        "SCAN", collection, "CURSOR", cursor)
+                    all_records.extend(response)
+                    if cursor == 0:
+                        break
+
+                changed_records = []
+                current_snapshot = {}
+
+                for item in all_records:
+                    entity_id = item[0] if isinstance(item, list) else item
+                    if isinstance(entity_id, bytes):
+                        entity_id = entity_id.decode()
+
+                    resp = client.execute_command(
+                        "GET", collection, entity_id, "WITHFIELDS", "OBJECT")
+                    if not resp or len(resp) < 2:
+                        continue
+
+                    geom = json.loads(resp[0])
+                    fields_raw = resp[1][1] if len(resp[1]) >= 2 else "{}"
+                    fields = json.loads(fields_raw)
+
+                    redis_key = f"{collection}:{entity_id}"
+                    in_geo_raw = redis_client.hget(redis_key, "in_geofence")
+                    in_geofence = json.loads(in_geo_raw) if in_geo_raw else False
+                    fields["in_geofence"] = in_geofence
+
+                    record_hash = json.dumps({"geom": geom, "fields": fields}, sort_keys=True)
+                    current_snapshot[entity_id] = record_hash
+
+                    # 🔁 Compare with previous snapshot
+                    if previous_snapshot.get(entity_id) != record_hash:
+                        changed_records.append([
+                            entity_id,
+                            json.dumps(geom),
+                            ["info", json.dumps(fields)]
+                        ])
+
+                if changed_records:
+                    raw_data = {
+                        "type": "scan",
+                        "collection": collection,
+                        "data": changed_records
+                    }
+                    await websocket.send_text(json.dumps(raw_data))
+
+                previous_snapshot = current_snapshot
 
             except Exception as e:
                 await websocket.send_text(json.dumps({"error": f"SCAN failed: {e}"}))

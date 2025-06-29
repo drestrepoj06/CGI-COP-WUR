@@ -36,7 +36,7 @@
 
 <body>
     <div id="map"></div>
-    <div id="timeDisplay" class="time-display">Loading time...</div> 
+    <div id="timeDisplay" class="time-display">Loading time...</div>
 
     <script>
         //__INSERT_RAILS_HERE__   
@@ -577,10 +577,58 @@
             });
         }
 
-
-
         // railsegmentWebSocket();
 
+
+        function drawGeofenceSegments() {
+            const socket = new WebSocket("ws://localhost:8000/ws/scan_filter");
+
+            socket.onopen = () => {
+                socket.send(JSON.stringify({ collection: "geofence_seg" }));
+            };
+
+            socket.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    if (data.collection !== "geofence_seg" || !Array.isArray(data.data)) return;
+
+                    data.data.forEach(item => {
+                        const [id, geojsonStr, fieldArr] = item;
+                        if (!Array.isArray(fieldArr) || fieldArr[0] !== "info") return;
+
+                        let info, geojson;
+                        try {
+                            info = JSON.parse(fieldArr[1]);
+                            geojson = JSON.parse(geojsonStr);
+                        } catch (err) {
+                            console.warn(`⚠️ Parse error for ${id}:`, err);
+                            return;
+                        }
+
+                        const distance = info.distance_from_train;
+                        if (typeof distance !== "number") return;
+
+                        const coords = geojson.coordinates;
+                        const formattedCoords = coords.map(ring =>
+                            ring.map(([lon, lat]) => [lat, lon])
+                        );
+
+                        const fillColor = distance <= 400 ? "#FF6666" : "#FFD966"; // Light red or yellow
+
+                        L.polygon(formattedCoords, {
+                            color: fillColor,
+                            fillColor: fillColor,
+                            weight: 2,
+                            fillOpacity: 0.3
+                        }).addTo(map);
+                    });
+                } catch (err) {
+                    console.error("🚨 Failed to render geofence_seg polygons:", err);
+                }
+            };
+        }
+
+        drawGeofenceSegments();
 
     </script>
 </body>
