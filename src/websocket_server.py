@@ -33,6 +33,7 @@ logger = logging.getLogger(__name__)
 
 global_merged_geojson = None  #
 
+
 def mark_random_train_as_inactive(client):
     global global_merged_geojson
     max_retries = 30
@@ -44,18 +45,20 @@ def mark_random_train_as_inactive(client):
 
             merged_geojson, affected_segments = update_nearby_segments(
                 client, train_obj)
-            
+
             new_geom = shape(merged_geojson)
             if global_merged_geojson:
-                combined = unary_union([shape(global_merged_geojson), new_geom])
+                combined = unary_union(
+                    [shape(global_merged_geojson), new_geom])
             else:
                 combined = new_geom
 
             global_merged_geojson = mapping(combined)
 
-            create_hooks(client, global_merged_geojson)
-
+            # create_hooks(client, global_merged_geojson)
             # create_hooks(client, merged_geojson)
+            create_hooks(client, global_merged_geojson, selected_id)
+
             reemit_entities(client, ["train", "ambulance"])
 
             incident = create_incident(
@@ -156,10 +159,26 @@ def update_nearby_segments(client, train_obj):
     return merged_geojson, affected
 
 
-def create_hooks(client, geojson_zone):
+# def create_hooks(client, geojson_zone):
+#     for collection in ["train", "ambulance"]:
+#         try:
+#             hook_name = f"{collection}_alert_zone"
+#             client.execute_command(
+#                 "SETCHAN", hook_name,
+#                 "WITHIN", collection,
+#                 "FENCE", "DETECT", "enter, inside, exit",
+#                 "COMMANDS", "set",
+#                 "OBJECT", json.dumps(geojson_zone)
+#             )
+#             logger.info(f"📡 Hook created for {collection}")
+#         except Exception as e:
+#             logger.warning(f"⚠️ Hook setup failed for {collection}: {e}")
+
+
+def create_hooks(client, geojson_zone, incident_id):
     for collection in ["train", "ambulance"]:
         try:
-            hook_name = f"{collection}_alert_zone"
+            hook_name = f"{collection}_alert_zone_{incident_id}"
             client.execute_command(
                 "SETCHAN", hook_name,
                 "WITHIN", collection,
@@ -167,7 +186,8 @@ def create_hooks(client, geojson_zone):
                 "COMMANDS", "set",
                 "OBJECT", json.dumps(geojson_zone)
             )
-            logger.info(f"📡 Hook created for {collection}")
+            logger.info(
+                f"📡 Hook created for {collection} on incident {incident_id}")
         except Exception as e:
             logger.warning(f"⚠️ Hook setup failed for {collection}: {e}")
 
@@ -212,16 +232,35 @@ def startup_event():
     start_geofence_listener()
 
 
+# def start_geofence_listener():
+#     def listen():
+#         # Create a new event loop for this thread
+#         new_loop = asyncio.new_event_loop()
+#         asyncio.set_event_loop(new_loop)
+
+#         pubsub = client.pubsub()  # ✅ use Tile38 client
+#         pubsub.psubscribe("train_alert_zone", "ambulance_alert_zone")
+#         logger.info(
+#             "🛰️ Tile38 geofence listener started and subscribed to *_alert_zone channels")
+
+#         for message in pubsub.listen():
+#             logger.info(f"📨 PubSub message received: {message}")
+#             if message["type"] == "pmessage":
+#                 handle_geofence_message(message)
+
+#     thread = threading.Thread(target=listen, daemon=True)
+#     thread.start()
+
+
 def start_geofence_listener():
     def listen():
-        # Create a new event loop for this thread
         new_loop = asyncio.new_event_loop()
         asyncio.set_event_loop(new_loop)
 
-        pubsub = client.pubsub()  # ✅ use Tile38 client
-        pubsub.psubscribe("train_alert_zone", "ambulance_alert_zone")
+        pubsub = client.pubsub()
+        pubsub.psubscribe("train_alert_zone_*", "ambulance_alert_zone_*")
         logger.info(
-            "🛰️ Tile38 geofence listener started and subscribed to *_alert_zone channels")
+            "🛰️ Tile38 geofence listener started and subscribed to *_alert_zone_* channels")
 
         for message in pubsub.listen():
             logger.info(f"📨 PubSub message received: {message}")
@@ -249,8 +288,12 @@ def handle_geofence_message(message):
         if isinstance(channel, bytes):
             channel = channel.decode()
 
-        match = re.match(r"(train|ambulance)_alert_zone", channel)
+        # match = re.match(r"(train|ambulance)_alert_zone", channel)
+        # collection = match.group(1) if match else None
+
+        match = re.match(r"(train|ambulance)_alert_zone_(\d+)", channel)
         collection = match.group(1) if match else None
+        incident_id = match.group(2) if match else None
         if not collection:
             logger.warning(
                 f"⚠️ Could not determine collection from channel: {channel}")
@@ -272,6 +315,9 @@ def handle_geofence_message(message):
             logger.info("⚠️ Skipping geofence message — no entity ID found.")
             return
 
+        logger.info(
+            f"📥 Geofence triggered by incident {incident_id}, entity {entity_id} on channel {channel}")
+        
         key = f"{collection}_alerts"
         inside_once_key = f"{collection}_inside_once"
         inside_set_key = f"{collection}_geofence_inside"
@@ -280,21 +326,43 @@ def handle_geofence_message(message):
 
         message_text = None
 
+        # if event == "enter":
+        #     redis_client.sadd(inside_set_key, entity_id)
+        #     redis_client.srem(inside_once_key, entity_id)
+        #     message_text = f"{entity_type} {entity_id} entered the geofenced area."
+
+        # elif event == "inside":
+        #     redis_client.sadd(inside_set_key, entity_id)
+        #     if not redis_client.sismember(inside_once_key, entity_id):
+        #         redis_client.sadd(inside_once_key, entity_id)
+        #         message_text = f"{entity_type} {entity_id} is inside the geofenced area."
+
+        # elif event == "exit":
+        #     redis_client.srem(inside_set_key, entity_id)
+        #     redis_client.srem(inside_once_key, entity_id)
+        #     message_text = f"{entity_type} {entity_id} exited the geofenced area."
+
         if event == "enter":
             redis_client.sadd(inside_set_key, entity_id)
             redis_client.srem(inside_once_key, entity_id)
-            message_text = f"{entity_type} {entity_id} entered the geofenced area."
+            message_text = (
+                f"{entity_type} {entity_id} entered the geofenced area (Incident #{incident_id})."
+            )
 
         elif event == "inside":
             redis_client.sadd(inside_set_key, entity_id)
             if not redis_client.sismember(inside_once_key, entity_id):
                 redis_client.sadd(inside_once_key, entity_id)
-                message_text = f"{entity_type} {entity_id} is inside the geofenced area."
+                message_text = (
+                    f"{entity_type} {entity_id} is inside the geofenced area (Incident #{incident_id})."
+                )
 
         elif event == "exit":
             redis_client.srem(inside_set_key, entity_id)
             redis_client.srem(inside_once_key, entity_id)
-            message_text = f"{entity_type} {entity_id} exited the geofenced area."
+            message_text = (
+                f"{entity_type} {entity_id} exited the geofenced area (Incident #{incident_id})."
+            )
 
         else:
             logger.warning(f"⚠️ Unknown event '{event}' on channel: {channel}")
@@ -716,6 +784,12 @@ def reset_all_trains(client):
         client.execute_command("DROP", "broken_train")
         client.execute_command("PDELCHAN", "train_alert_zone")
         client.execute_command("PDELCHAN", "ambulance_alert_zone")
+        client.execute_command("PDELCHAN", "train_alert_zone_*")
+        client.execute_command("PDELCHAN", "ambulance_alert_zone_*")
+
+        global global_merged_geojson
+        global_merged_geojson = None
+
         redis_client.delete("train_alerts")
         redis_client.delete("ambulance_alerts")
         logging.info(
