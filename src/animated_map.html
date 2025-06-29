@@ -331,9 +331,16 @@
                     }
 
                     const isAvailable = info.availability_status === true;
-                    const iconUrl = isAvailable
-                        ? 'https://raw.githubusercontent.com/drestrepoj06/CGI-COP-WUR/main/src/vec/ambulance_available.png'
-                        : 'https://raw.githubusercontent.com/drestrepoj06/CGI-COP-WUR/main/src/vec/ambulance_unavailable.png';
+                    const isInGeofence = info.in_geofence === true || info.in_geofence === "true";
+
+                    let iconUrl = '';
+                    if (isInGeofence) {
+                        iconUrl = 'https://raw.githubusercontent.com/drestrepoj06/CGI-COP-WUR/refs/heads/stable/src/vec/ambulance_geofence.png';
+                    } else {
+                        iconUrl = isAvailable
+                            ? 'https://raw.githubusercontent.com/drestrepoj06/CGI-COP-WUR/refs/heads/main/src/vec/ambulance_available.png'
+                            : 'https://raw.githubusercontent.com/drestrepoj06/CGI-COP-WUR/refs/heads/main/src/vec/ambulance_unavailable.png';
+                    }
 
                     const isGoingToIncident = info.status === true;
                     const ambulanceIcon = isGoingToIncident
