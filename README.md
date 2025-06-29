@@ -1,4 +1,4 @@
-1. change train/ambu icons in geofence area.
+1. change train/ambu icons in geofence area (Jhon, done).
 2. solve problems with create incident button and resolve button. (Falco, done)
 3. Severity of geofence rail segment and assign different colors based on that.
 4. Put the scale bar in the map (Thijs, done)
