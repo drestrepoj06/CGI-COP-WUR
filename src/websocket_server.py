@@ -217,61 +217,6 @@ def fetch_and_freeze_train(client, train_id):
     return train_obj
 
 
-# def update_nearby_segments(client, train_obj):
-#     coords = train_obj["object"]["coordinates"]
-#     if train_obj["object"]["type"] != "Point" or len(coords) < 2:
-#         raise ValueError(f"Invalid train geometry: {coords}")
-
-#     lon, lat = coords[:2]
-#     response = client.execute_command(
-#         "NEARBY", "railsegment", "POINT", lat, lon, 1000)
-#     items = response[1] if len(response) > 1 else []
-
-#     rail_ids = []
-#     for item in items:
-#         if isinstance(item, list) and item:
-#             rail_id = item[0]
-#             if isinstance(rail_id, bytes):
-#                 rail_id = rail_id.decode()
-#             rail_ids.append(rail_id)
-
-#     logger.info(f"🛤️ Found {len(rail_ids)} nearby segments.")
-
-#     affected = []
-#     for rail_id in rail_ids:
-#         resp = client.execute_command(
-#             "GET", "railsegment", rail_id, "WITHFIELDS", "OBJECT")
-#         if not resp or len(resp) < 2:
-#             continue
-
-#         geom = json.loads(resp[0])
-#         fields = json.loads(resp[1][1]) if len(resp[1]) >= 2 else {}
-#         fields.setdefault("info", {})["status"] = False
-
-#         # Update back to server
-#         args = ["SET", "railsegment", rail_id, "FIELD", "info",
-#                 json.dumps(fields), "OBJECT", json.dumps(geom)]
-#         client.execute_command(*args)
-
-#         affected.append({
-#             "type": "Feature",
-#             "geometry": geom,
-#             "properties": fields.get("info", {})
-#         })
-
-#     return affected
-
-
-# def merge_segments_to_zone(segments):
-#     if not segments:
-#         raise ValueError("No segments to merge.")
-
-#     shapes = [shape(seg["geometry"]) for seg in segments]
-#     merged = unary_union(shapes)
-#     geojson = json.loads(json.dumps(merged.__geo_interface__))
-
-#     logger.info(f"📐 Merged zone created: {merged.geom_type}")
-#     return geojson
 
 
 def create_hooks(client, geojson_zone):
@@ -681,7 +626,7 @@ def reset_all_trains(client):
                     fields_data = {}
 
                     if len(rail_get[1]) >= 2:
-                        fields_data = {rail_get[1][0]                                       : json.loads(rail_get[1][1])}
+                        fields_data = {rail_get[1][0]: json.loads(rail_get[1][1])}
 
                     if "info" in fields_data and isinstance(fields_data["info"], dict):
                         fields_data["info"]["status"] = True
