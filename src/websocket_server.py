@@ -59,7 +59,8 @@ def mark_random_train_as_inactive(client):
             }
 
         except Exception as e:
-            logger.error(f"❌ Failed to mark train inactive: {e}", exc_info=True)
+            logger.error(
+                f"❌ Failed to mark train inactive: {e}", exc_info=True)
             return None
 
 
@@ -217,8 +218,6 @@ def fetch_and_freeze_train(client, train_id):
     return train_obj
 
 
-
-
 def create_hooks(client, geojson_zone):
     for collection in ["train", "ambulance"]:
         try:
@@ -291,17 +290,20 @@ def handle_geofence_message(message):
         match = re.match(r"(train|ambulance)_alert_zone", channel)
         collection = match.group(1) if match else None
         if not collection:
-            logger.warning(f"⚠️ Could not determine collection from channel: {channel}")
+            logger.warning(
+                f"⚠️ Could not determine collection from channel: {channel}")
             return
 
         info = data.get("fields", {}).get("info", {})
 
         # 🚦 Only skip if it's a train with status False
         if collection == "train" and info.get("status") is False:
-            logger.info(f"🛑 Skipping geofence event for inactive train: {info}")
+            logger.info(
+                f"🛑 Skipping geofence event for inactive train: {info}")
             return
 
-        logger.info(f"📥 Raw geofence data received on {channel}: {json.dumps(data)}")
+        logger.info(
+            f"📥 Raw geofence data received on {channel}: {json.dumps(data)}")
 
         entity_id = data.get("id") or data.get("object", {}).get("id")
         if not entity_id:
@@ -339,10 +341,13 @@ def handle_geofence_message(message):
         # 📝 Update 'in_geofence' field in Redis
         try:
             in_geofence = event in ("enter", "inside")
-            redis_client.hset(f"{collection}:{entity_id}", "in_geofence", json.dumps(in_geofence))
-            logger.info(f"📝 Stored 'in_geofence' = {in_geofence} for {collection}:{entity_id} in Redis")
+            redis_client.hset(f"{collection}:{entity_id}",
+                              "in_geofence", json.dumps(in_geofence))
+            logger.info(
+                f"📝 Stored 'in_geofence' = {in_geofence} for {collection}:{entity_id} in Redis")
         except Exception as update_error:
-            logger.warning(f"⚠️ Failed to store 'in_geofence' for {entity_id} in Redis: {update_error}")
+            logger.warning(
+                f"⚠️ Failed to store 'in_geofence' for {entity_id} in Redis: {update_error}")
 
         if message_text:
             redis_client.lpush(key, message_text)
@@ -361,7 +366,6 @@ def handle_geofence_message(message):
 
     except Exception as e:
         logger.error(f"❌ Error handling geofence message: {e}", exc_info=True)
-
 
 
 def start_geofence_listener():
@@ -513,16 +517,16 @@ def create_incident(client, train_id, location, description="Incident reported",
         "high": 3,
         "critical": 4
     }
-    expected_resolving_time_map = { 
-        "low": 5, 
-        "moderate": 10, 
-        "high": 20, 
-        "critical": 30 
-    } 
+    expected_resolving_time_map = {
+        "low": 5,
+        "moderate": 10,
+        "high": 20,
+        "critical": 30
+    }
 
     affected_passengers = affected_passengers_map[severity]
     ambulance_units = ambulance_units_map[severity]
-    expected_resolving_time = expected_resolving_time_map[severity] 
+    expected_resolving_time = expected_resolving_time_map[severity]
     technical_resources = "no"  # Always "no"
 
     if not isinstance(location, dict) or "type" not in location or "coordinates" not in location:
@@ -541,7 +545,7 @@ def create_incident(client, train_id, location, description="Incident reported",
             "FIELD", "affected_passengers", affected_passengers,
             "FIELD", "ambulance_units", ambulance_units,
             "FIELD", "technical_resources", technical_resources,
-            "FIELD", "expected_resolving_time", expected_resolving_time, 
+            "FIELD", "expected_resolving_time", expected_resolving_time,
             "OBJECT", geometry_json
         )
 
@@ -626,7 +630,8 @@ def reset_all_trains(client):
                     fields_data = {}
 
                     if len(rail_get[1]) >= 2:
-                        fields_data = {rail_get[1][0]: json.loads(rail_get[1][1])}
+                        fields_data = {rail_get[1][0]
+                            : json.loads(rail_get[1][1])}
 
                     if "info" in fields_data and isinstance(fields_data["info"], dict):
                         fields_data["info"]["status"] = True
@@ -680,11 +685,14 @@ def reset_all_trains(client):
                             "FIELD", "info", json.dumps(fields),
                             "OBJECT", json.dumps(geometry_obj)
                         )
-                        redis_client.hdel(f"ambulance:{amb_id}", "in_geofence")  # <-- Added this
-                        logging.info(f"🧼 Removed 'in_geofence' from ambulance {amb_id}")
+                        # <-- Added this
+                        redis_client.hdel(f"ambulance:{amb_id}", "in_geofence")
+                        logging.info(
+                            f"🧼 Removed 'in_geofence' from ambulance {amb_id}")
 
                 except Exception as e:
-                    logging.warning(f"⚠️ Could not clean ambulance {amb_id}: {e}")
+                    logging.warning(
+                        f"⚠️ Could not clean ambulance {amb_id}: {e}")
         except Exception as e:
             logging.error(f"❌ Failed to scan ambulances: {e}")
 
@@ -701,7 +709,6 @@ def reset_all_trains(client):
     except Exception as e:
         logging.error(f"Reset failed: {e}")
         return "fail"
-
 
 
 @app.websocket("/ws/scan")
@@ -724,7 +731,8 @@ async def scan_websocket(websocket: WebSocket):
             try:
                 # SCAN all object keys in the collection
                 while True:
-                    cursor, response = client.execute_command("SCAN", collection, "CURSOR", cursor)
+                    cursor, response = client.execute_command(
+                        "SCAN", collection, "CURSOR", cursor)
                     all_records.extend(response)
                     if cursor == 0:
                         break
@@ -737,7 +745,8 @@ async def scan_websocket(websocket: WebSocket):
                         entity_id = entity_id.decode()
 
                     # Get object and fields from Tile38
-                    resp = client.execute_command("GET", collection, entity_id, "WITHFIELDS", "OBJECT")
+                    resp = client.execute_command(
+                        "GET", collection, entity_id, "WITHFIELDS", "OBJECT")
                     if not resp or len(resp) < 2:
                         continue
 
@@ -748,7 +757,8 @@ async def scan_websocket(websocket: WebSocket):
                     # Query Redis for the in_geofence flag
                     redis_key = f"{collection}:{entity_id}"
                     in_geo_raw = redis_client.hget(redis_key, "in_geofence")
-                    in_geofence = json.loads(in_geo_raw) if in_geo_raw else False
+                    in_geofence = json.loads(
+                        in_geo_raw) if in_geo_raw else False
                     fields["in_geofence"] = in_geofence
 
                     # Prepare for frontend
