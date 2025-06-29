@@ -31,19 +31,31 @@ redis_client = redis.Redis(
 
 logger = logging.getLogger(__name__)
 
+global_merged_geojson = None  #
 
 def mark_random_train_as_inactive(client):
+    global global_merged_geojson
     max_retries = 30
     for attempt in range(max_retries):
         try:
             train_ids = get_trains_within_area(client)
-            selected_id = random.choice(train_ids)  # 8843 randomly choose one
+            selected_id = random.choice(train_ids)
             train_obj = fetch_and_freeze_train(client, selected_id)
 
             merged_geojson, affected_segments = update_nearby_segments(
                 client, train_obj)
+            
+            new_geom = shape(merged_geojson)
+            if global_merged_geojson:
+                combined = unary_union([shape(global_merged_geojson), new_geom])
+            else:
+                combined = new_geom
 
-            create_hooks(client, merged_geojson)
+            global_merged_geojson = mapping(combined)
+
+            create_hooks(client, global_merged_geojson)
+
+            # create_hooks(client, merged_geojson)
             reemit_entities(client, ["train", "ambulance"])
 
             incident = create_incident(
@@ -218,8 +230,6 @@ def start_geofence_listener():
 
     thread = threading.Thread(target=listen, daemon=True)
     thread.start()
-
-# Geofence message handler
 
 
 def handle_geofence_message(message):
@@ -636,7 +646,8 @@ def reset_all_trains(client):
                     fields_data = {}
 
                     if len(rail_get[1]) >= 2:
-                        fields_data = {rail_get[1][0]: json.loads(rail_get[1][1])}
+                        fields_data = {rail_get[1][0]
+                            : json.loads(rail_get[1][1])}
 
                     if "info" in fields_data and isinstance(fields_data["info"], dict):
                         fields_data["info"]["status"] = True
