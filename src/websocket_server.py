@@ -144,80 +144,6 @@ def update_nearby_segments(client, train_obj):
     return merged_geojson, affected
 
 
-def get_trains_within_area(client):
-    """
-    Returns a list of train IDs with is_within_area=True
-    """
-    try:
-        response = client.execute_command("SCAN", "train")
-        items = response[1] if len(response) > 1 else []
-        train_ids = []
-
-        for item in items:
-            # 取出 ID
-            if isinstance(item, list) and item:
-                train_id = item[0]
-                fields = item[2] if len(item) > 2 else []
-            else:
-                train_id = item
-                fields = None
-
-            if isinstance(train_id, bytes):
-                train_id = train_id.decode()
-
-            info_obj = None
-            try:
-                if fields and isinstance(fields, list) and len(fields) >= 2:
-                    info_obj = json.loads(fields[1])
-                else:
-                    resp = client.execute_command(
-                        "GET", "train", train_id, "WITHFIELDS", "OBJECT")
-                    if resp and len(resp) > 1 and len(resp[1]) >= 2:
-                        info_obj = json.loads(resp[1][1])
-            except Exception as e:
-                logger.warning(f"❌ Error parsing info for {train_id}: {e}")
-
-            if info_obj and info_obj.get("is_within_area") is True:
-                train_ids.append(train_id)
-
-        logger.info(
-            f"✅ Found {len(train_ids)} trains within area: {train_ids}")
-        return train_ids
-
-    except Exception as e:
-        logger.error(f"🚨 Failed to fetch trains in area: {e}", exc_info=True)
-        return []
-
-
-def fetch_and_freeze_train(client, train_id):
-    response = client.execute_command(
-        "GET", "train", train_id, "WITHFIELDS", "OBJECT")
-    if response is None or len(response) < 2:
-        raise ValueError(
-            f"Unexpected train response for ID {train_id}: {response}")
-
-    geometry_obj = json.loads(response[0])
-    field_data = json.loads(response[1][1]) if len(response[1]) >= 2 else {}
-
-    field_data["status"] = False
-    field_data["frozen_coords"] = geometry_obj["coordinates"]
-
-    train_obj = {
-        "ok": True,
-        "object": geometry_obj,
-        "fields": {"info": field_data}
-    }
-
-    # SET updated train back to Tile38
-    args = ["SET", "train", train_id]
-    args += ["FIELD", "info", json.dumps(field_data)]
-    args += ["OBJECT", json.dumps(geometry_obj)]
-    client.execute_command(*args)
-    logger.info(f"🧊 Train {train_id} frozen and updated.")
-
-    return train_obj
-
-
 def create_hooks(client, geojson_zone):
     for collection in ["train", "ambulance"]:
         try:
@@ -269,7 +195,33 @@ def reemit_entities(client, collections):
             client.execute_command(*args)
 
 
+@app.on_event("startup")
+def startup_event():
+    start_geofence_listener()
+
+
+def start_geofence_listener():
+    def listen():
+        # Create a new event loop for this thread
+        new_loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(new_loop)
+
+        pubsub = client.pubsub()  # ✅ use Tile38 client
+        pubsub.psubscribe("train_alert_zone", "ambulance_alert_zone")
+        logger.info(
+            "🛰️ Tile38 geofence listener started and subscribed to *_alert_zone channels")
+
+        for message in pubsub.listen():
+            logger.info(f"📨 PubSub message received: {message}")
+            if message["type"] == "pmessage":
+                handle_geofence_message(message)
+
+    thread = threading.Thread(target=listen, daemon=True)
+    thread.start()
+
 # Geofence message handler
+
+
 def handle_geofence_message(message):
     if message["type"] != "pmessage":
         return
@@ -368,24 +320,78 @@ def handle_geofence_message(message):
         logger.error(f"❌ Error handling geofence message: {e}", exc_info=True)
 
 
-def start_geofence_listener():
-    def listen():
-        # Create a new event loop for this thread
-        new_loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(new_loop)
+def get_trains_within_area(client):
+    """
+    Returns a list of train IDs with is_within_area=True
+    """
+    try:
+        response = client.execute_command("SCAN", "train")
+        items = response[1] if len(response) > 1 else []
+        train_ids = []
 
-        pubsub = client.pubsub()  # ✅ use Tile38 client
-        pubsub.psubscribe("train_alert_zone", "ambulance_alert_zone")
+        for item in items:
+            # 取出 ID
+            if isinstance(item, list) and item:
+                train_id = item[0]
+                fields = item[2] if len(item) > 2 else []
+            else:
+                train_id = item
+                fields = None
+
+            if isinstance(train_id, bytes):
+                train_id = train_id.decode()
+
+            info_obj = None
+            try:
+                if fields and isinstance(fields, list) and len(fields) >= 2:
+                    info_obj = json.loads(fields[1])
+                else:
+                    resp = client.execute_command(
+                        "GET", "train", train_id, "WITHFIELDS", "OBJECT")
+                    if resp and len(resp) > 1 and len(resp[1]) >= 2:
+                        info_obj = json.loads(resp[1][1])
+            except Exception as e:
+                logger.warning(f"❌ Error parsing info for {train_id}: {e}")
+
+            if info_obj and info_obj.get("is_within_area") is True:
+                train_ids.append(train_id)
+
         logger.info(
-            "🛰️ Tile38 geofence listener started and subscribed to *_alert_zone channels")
+            f"✅ Found {len(train_ids)} trains within area: {train_ids}")
+        return train_ids
 
-        for message in pubsub.listen():
-            logger.info(f"📨 PubSub message received: {message}")
-            if message["type"] == "pmessage":
-                handle_geofence_message(message)
+    except Exception as e:
+        logger.error(f"🚨 Failed to fetch trains in area: {e}", exc_info=True)
+        return []
 
-    thread = threading.Thread(target=listen, daemon=True)
-    thread.start()
+
+def fetch_and_freeze_train(client, train_id):
+    response = client.execute_command(
+        "GET", "train", train_id, "WITHFIELDS", "OBJECT")
+    if response is None or len(response) < 2:
+        raise ValueError(
+            f"Unexpected train response for ID {train_id}: {response}")
+
+    geometry_obj = json.loads(response[0])
+    field_data = json.loads(response[1][1]) if len(response[1]) >= 2 else {}
+
+    field_data["status"] = False
+    field_data["frozen_coords"] = geometry_obj["coordinates"]
+
+    train_obj = {
+        "ok": True,
+        "object": geometry_obj,
+        "fields": {"info": field_data}
+    }
+
+    # SET updated train back to Tile38
+    args = ["SET", "train", train_id]
+    args += ["FIELD", "info", json.dumps(field_data)]
+    args += ["OBJECT", json.dumps(geometry_obj)]
+    client.execute_command(*args)
+    logger.info(f"🧊 Train {train_id} frozen and updated.")
+
+    return train_obj
 
 
 def fetch_entity_positions(collection: str):
@@ -630,8 +636,7 @@ def reset_all_trains(client):
                     fields_data = {}
 
                     if len(rail_get[1]) >= 2:
-                        fields_data = {rail_get[1][0]
-                            : json.loads(rail_get[1][1])}
+                        fields_data = {rail_get[1][0]: json.loads(rail_get[1][1])}
 
                     if "info" in fields_data and isinstance(fields_data["info"], dict):
                         fields_data["info"]["status"] = True
@@ -786,8 +791,3 @@ async def scan_websocket(websocket: WebSocket):
     finally:
         websocket_connections.discard(websocket)
         await websocket.close()
-
-
-@app.on_event("startup")
-def startup_event():
-    start_geofence_listener()
