@@ -128,6 +128,7 @@ def render_incident_block(incident_id, incident_data, ambulances):
 
 
 def display_rescue_progress_auto(client):
+    st.markdown("#### Rescue Progress")
     st_autorefresh(interval=2000, key="rescue_polling")
 
     progress_data = get_ambulance_progress(client)

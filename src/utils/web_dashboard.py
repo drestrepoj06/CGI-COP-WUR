@@ -16,7 +16,6 @@ def render_dashboard():
     col = st.columns((1.5, 1.25, 4.75, 1), gap="small")
 
     with col[0]:
-        st.markdown("#### Incident Summary")
         display_incident_summary()
         display_rescue_progress_auto(client)
 
