@@ -11,7 +11,7 @@ script_dir = os.path.dirname(os.path.abspath(__file__))
 geojson_path = os.path.join(script_dir, 'AmbulanceStations.geojson')
 SAVE_PATH = os.path.join(script_dir, 'ambulance_logs.json')
 update_interval = 1  # seconds between updates
-simulation_minutes = 10
+simulation_minutes = 60
 AVERAGE_SPEED_KPH = 50  # Average speed of ambulances in km/h
 
 # TOMTOM API

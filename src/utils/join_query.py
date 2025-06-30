@@ -1,69 +1,155 @@
 from streamlit_autorefresh import st_autorefresh
-import asyncio
-import redis
+
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import streamlit as st
 
-# Tile38 setup
-TILE38_HOST = 'tile38'
-TILE38_PORT = 9851
+
+def scan_broken_train_incidents(client):
+    """Scan broken_train to get all event data"""
+    results = {}
+    try:
+        response = client.execute_command("SCAN", "broken_train")
+
+        # logging.info(f"response: {response}")
+        items = response[1] if len(response) > 1 else []
+
+        for item in items:
+            object_id = item[0] if isinstance(item, list) else item
+            object_id = object_id.decode() if isinstance(
+                object_id, bytes) else str(object_id)
+
+            get_response = client.execute_command(
+                "GET", "broken_train", object_id, "WITHFIELDS")
+            if not get_response or len(get_response) < 2:
+                continue
+
+            fields_raw = get_response[1]
+            fields = dict(zip(fields_raw[::2], fields_raw[1::2]))
+
+            geometry = get_response[0]
+            geometry_obj = json.loads(geometry) if isinstance(geometry, (str, bytes)) else geometry
+
+            parsed = parse_incident_metadata(object_id, fields, geometry_obj)
+            
+            # parsed = parse_incident_metadata(object_id, fields)
+            if parsed:
+                # results[parsed["incident_id"]] = parsed
+                results[object_id] = parsed 
+
+    except Exception as e:
+        logging.error(f"Failed to scan broken train: {e}")
+    return results
 
 
-async def record_ambulance_path(route_points, timestamp, route_estimated_time, ambulance_id):
+def parse_incident_metadata(object_id, fields, geometry=None):
+    try:
+        incident_id = object_id.split("_")[1]
+        ts_ms = int(geometry["coordinates"][2]) if geometry else None
+        start_time = datetime.fromtimestamp(ts_ms / 1000) if ts_ms else None
 
-    tile38_client = redis.Redis(
-        host=TILE38_HOST, port=TILE38_PORT, decode_responses=True)
+        return {
+            "incident_id": incident_id,
+            "start_time": start_time,
+            "affected_passengers": fields.get("affected_passengers"),
+            "description": fields.get("description"),
+            "expected_resolving_time": int(fields.get("expected_resolving_time", 0)),
+            "status": fields.get("status"),
+            "severity": fields.get("severity") or "low"
+        }
+    except Exception as e:
+        logging.warning(f"Failed to parse incident {object_id}: {e}")
+        return None
 
-    # 遍历所有路径点，并计算时间偏移量
-    for index, (lat, lng) in enumerate(route_points):
-        adjusted_timestamp = timestamp + \
-            (index * route_estimated_time // len(route_points) * 50)
 
-        # 执行 Tile38 SET 命令
-        command = f"SET ambu_path {ambulance_id}_{adjusted_timestamp} POINT {lat} {lng} {adjusted_timestamp}"
 
-        # command = f"SET ambu_path {ambulance_id} POINT {lat} {lng} {adjusted_timestamp}"
-        tile38_client.execute_command(command)
+def group_ambulances_by_incident(progress_data):
+    """Group the ambulance data by incident_id"""
+    grouped = {}
+    for ambu in progress_data:
+        incident_id = ambu.get("incident_train_id", "Unknown")
+        grouped.setdefault(incident_id, []).append(ambu)
+    return grouped
 
-        print(f"Recorded: {command}")
+
+def render_incident_block(incident_id, incident_data, ambulances):
+    severity = str(incident_data.get("severity")).lower()
+    color_map = {
+        "critical": "#ffe6e6",  # light red
+        "high": "#fff2cc",      # light orange
+        "moderate": "#e6f7ff",  # light blue
+        "low": "#f0f0f0"        # light grey
+    }
+    box_color = color_map.get(severity, "#f0f0f0")
+
+    latest_eta = max(a["eta"] for a in ambulances)
+    resolution_time = datetime.fromtimestamp(latest_eta / 1000) + timedelta(
+        minutes=incident_data.get("expected_resolving_time", 0)
+    )
+
+    with st.container():
+        st.markdown(
+            f"""
+            <div style="
+                background-color: {box_color};
+                border-left: 6px solid #ff6f61;
+                padding: 15px;
+                margin-bottom: 25px;
+                border-radius: 8px;
+                color: black;
+            ">
+            <h4>🚨 Incident {incident_id}</h4>
+            🕐 <b>Occurred at:</b> {incident_data['start_time'].strftime('%Y-%m-%d %H:%M:%S')}<br>
+            👥 <b>Passengers affected:</b> {incident_data['affected_passengers']}<br>
+            📋 <b>Description:</b> {incident_data['description']}<br>
+            💡 <b>Severity:</b> {severity.capitalize()}<br>
+            🧩 <b>Estimated Resolution Time:</b> {incident_data['expected_resolving_time']} mins<br>
+            ✅ <b>Projected Resolution:</b> {resolution_time.strftime('%Y-%m-%d %H:%M:%S')}<br><br>
+            """,
+            unsafe_allow_html=True
+        )
+
+        for ambu in ambulances:
+            percent = min(ambu["past_time"] / ambu["travel_time"], 1.0) if ambu["travel_time"] else 0.0
+            remaining = max(ambu["travel_time"] - ambu["past_time"], 0)
+            eta_str = datetime.fromtimestamp(ambu["eta"] / 1000).strftime("%Y-%m-%d %H:%M:%S")
+
+            st.markdown(
+                f"<b>🚑 Ambulance {ambu['ambulance_id']}</b><br>"
+                f"📅 ETA: {eta_str} | ⏳ Remaining: {int(remaining // 60)}m {int(remaining % 60)}s<br>",
+                unsafe_allow_html=True
+            )
+            st.progress(percent)
+
+        st.markdown("</div>", unsafe_allow_html=True)
+
 
 
 def display_rescue_progress_auto(client):
-    # Refresh every 1 second
-    st_autorefresh(interval=1000, key="rescue_polling")
+    st_autorefresh(interval=2000, key="rescue_polling")
 
     progress_data = get_ambulance_progress(client)
+    if not progress_data:
+        st.info("🚑 No active rescue in progress.")
+        return
 
-    if progress_data:
-        # st.markdown("### ⏱️ Rescue Progress")
-        for ambu in progress_data:
-            ambulance_id = ambu["ambulance_id"]
-            eta = ambu["eta"]
-            travel_time = ambu["travel_time"]
-            past_time = ambu["past_time"]
+    incident_groups = group_ambulances_by_incident(progress_data)
+    all_incidents = scan_broken_train_incidents(client)
 
-            percent = min(past_time / travel_time, 1.0) if travel_time else 0.0
-            remaining_seconds = max(travel_time - past_time, 0)
+    for incident_id, ambulances in incident_groups.items():
+        incident_data = next(
+            (data for key, data in all_incidents.items() if incident_id in key), None
+        )
 
-            # Convert remaining time into minutes and seconds
-            minutes = int(remaining_seconds // 60)
-            seconds = int(remaining_seconds % 60)
+        
 
-            # Format ETA
-            eta_readable = datetime.fromtimestamp(
-                eta / 1000).strftime('%Y-%m-%d %H:%M:%S')
-
-            st.markdown(
-                f"**🚑 Ambulance {ambulance_id}**  \n"
-                f"ETA: {eta_readable} | Remaining Time: {minutes}m {seconds}s"
-            )
-
-            st.progress(percent)
-    # else:
-    #     st.info("Waiting for ambulance path data...")
+        # incident_data = all_incidents.get(incident_id)
+        if incident_data:
+            render_incident_block(incident_id, incident_data, ambulances)
+        else:
+            st.warning(f"⚠️ Incident {incident_id} not found in broken_train.")
 
 
 def get_ambulance_progress(client):
@@ -102,6 +188,8 @@ def get_ambulance_progress(client):
                     logging.warning(
                         f"⚠️ Missing data for {object_id}. Skipping.")
                     continue
+
+                incident_id = str(object_id).split("_")[0]
 
                 geometry = get_response[0]
                 field_data = get_response[1]
@@ -154,6 +242,7 @@ def get_ambulance_progress(client):
                     "past_time": round(past_time, 2),
                     "travel_time": travel_time,
                     "eta": ts_max,
+                    "incident_train_id": incident_id
                 })
 
             except Exception as e:

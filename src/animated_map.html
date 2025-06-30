@@ -17,28 +17,54 @@
             padding: 0;
             font-family: 'Source Sans Pro', sans-serif;
         }
+
+
+        .time-display {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: white;
+            padding: 5px 10px;
+            border-radius: 3px;
+            box-shadow: 0 0 5px rgba(0, 0, 0, 0.2);
+            z-index: 1000;
+            font-family: 'Source Sans Pro', sans-serif;
+            font-size: 14px;
+        }
     </style>
 </head>
 
 <body>
     <div id="map"></div>
+    <div id="timeDisplay" class="time-display">Loading time...</div>
 
     <script>
         //__INSERT_RAILS_HERE__   
         //__INSERT_AMBULANCE_STATIONS_HERE__
+        //__INSERT_TRAIN_STATIONS_HERE__
 
         const trainMarkers = {};
         const ambulanceMarkers = {};
 
         // Initialize Map
         function initMap() {
-            const map = L.map('map').setView([52.1, 5.1], 12);
+            const map = L.map('map', {
+                zoomSnap: 0.1,  // Allows zoom levels like 12.1, 12.2, etc.
+                zoomDelta: 0.5   // Controls how much zoom changes with each zoom interaction
+            }).setView([52.094040, 5.093102], 11.9);  // Example with decimal zoom level
 
             // Mapbox Light Gray Tile Layer
             L.tileLayer('https://api.mapbox.com/styles/v1/mapbox/navigation-day-v1/tiles/{z}/{x}/{y}?access_token=pk.eyJ1IjoicnVvdGFsIiwiYSI6ImNtYmh5ZjA5eDAyN3kyanI0cGE2b295MW0ifQ.Cf2xGVOEXF-7hbunq3soyw', {
                 tileSize: 512,
                 zoomOffset: -1,
                 attribution: '© <a href="https://www.mapbox.com/about/maps/">Mapbox</a> © <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+            }).addTo(map);
+
+            L.control.scale({
+                imperial: false,
+                metric: true,
+                maxWidth: 200,
+                position: 'bottomleft'
             }).addTo(map);
 
             L.circle([52.094442, 5.092170], {
@@ -64,6 +90,21 @@
                 }
             }).addTo(map);
 
+            // Render train stations
+            L.geoJSON(trainStationsData, {
+                pointToLayer: function (feature, latlng) {
+                    const trainStationIcon = L.icon({
+                        iconUrl: 'https://raw.githubusercontent.com/drestrepoj06/CGI-COP-WUR/refs/heads/stable/src/vec/train_station.png',
+                        iconSize: [20, 20],
+                        iconAnchor: [10, 10],
+                        popupAnchor: [0, -12]
+                    });
+
+                    return L.marker(latlng, { icon: trainStationIcon })
+                        .bindPopup(`🚉 ${feature.properties.StationName}`);
+                }
+            }).addTo(map);
+
             // Render rails
             L.geoJSON(railsData, {
                 style: {
@@ -72,13 +113,6 @@
                     opacity: 0.8
                 }
             }).addTo(map);
-
-            // L.polyline(routePoints, {
-            //     color: '#FF00FF',  // 浅紫色 (淡紫罗兰)
-            //     weight: 7,         // 线条宽度
-            //     opacity: 0.9       // 设置透明度 (0.0 完全透明 - 1.0 完全不透明)
-            // }).addTo(map);
-
 
             return map;
         }
@@ -129,32 +163,29 @@
                         return;
                     }
 
-                    if (isStopped) {
-                        if (!trainMarkers[id]) {
-                            // Skip showing stopped trains that are not on the map
-                            return;
-                        } else {
-                            // Remove marker for stopped trains
-                            map.removeLayer(trainMarkers[id]);
-                            delete trainMarkers[id];
-                            return; // Skip further processing for stopped train
-                        }
+                    if (isStopped && !trainMarkers[id]) {
+                        // Skip showing stopped trains that are not on the map
+                        return;
                     }
 
                     // Active train: continue
                     const latlng = [coordinates[1], coordinates[0]];
 
                     const popupContent = `🚆 Train ${id}<br/>
-                            ⏰ ${formatTimestamp(timestamp)}<br/>
-                            Type: ${trainType}<br/>
-                            Status: ${isStopped ? 'Stopped' : 'Active'}`;
+                            ▪️ Type: ${trainType}<br/>`;
 
                     // Choose icon based on train type and status
+                    const isInGeofence = info.in_geofence === true;
+
                     let iconUrl = '';
                     if (trainType === 'SPR') {
-                        iconUrl = 'https://raw.githubusercontent.com/drestrepoj06/CGI-COP-WUR/refs/heads/main/src/vec/SPR.png';
+                        iconUrl = isInGeofence
+                            ? 'https://raw.githubusercontent.com/drestrepoj06/CGI-COP-WUR/refs/heads/main/src/vec/SPR_geofence.png'
+                            : 'https://raw.githubusercontent.com/drestrepoj06/CGI-COP-WUR/refs/heads/main/src/vec/SPR.png';
                     } else {
-                        iconUrl = 'https://raw.githubusercontent.com/drestrepoj06/CGI-COP-WUR/refs/heads/main/src/vec/IC.png';
+                        iconUrl = isInGeofence
+                            ? 'https://raw.githubusercontent.com/drestrepoj06/CGI-COP-WUR/refs/heads/main/src/vec/IC_geofence.png'
+                            : 'https://raw.githubusercontent.com/drestrepoj06/CGI-COP-WUR/refs/heads/main/src/vec/IC.png';
                     }
 
                     const trainIcon = L.icon({
@@ -170,6 +201,10 @@
                             .bindPopup(popupContent);
                     } else {
                         trainMarkers[id].setLatLng(latlng);
+
+                        // 🔄 Update icon based on geofence status
+                        trainMarkers[id].setIcon(trainIcon);
+
                         if (trainMarkers[id].isPopupOpen()) {
                             trainMarkers[id].getPopup().setContent(popupContent);
                         }
@@ -179,7 +214,6 @@
                 }
             });
         }
-
 
         function initTrainWebSocket() {
             const trainSocket = new WebSocket("ws://localhost:8000/ws/scan");
@@ -297,19 +331,34 @@
                     }
 
                     const isAvailable = info.availability_status === true;
-                    const iconUrl = isAvailable
-                        ? 'https://raw.githubusercontent.com/drestrepoj06/CGI-COP-WUR/main/src/vec/ambulance_available.png'
-                        : 'https://raw.githubusercontent.com/drestrepoj06/CGI-COP-WUR/main/src/vec/ambulance_unavailable.png';
+                    const isInGeofence = info.in_geofence === true || info.in_geofence === "true";
 
-                    const ambulanceIcon = L.icon({
-                        iconUrl: iconUrl,
-                        iconSize: [26, 26],
-                        iconAnchor: [10, 10],
-                        popupAnchor: [0, -16]
-                    });
+                    let iconUrl = '';
+                    if (isInGeofence) {
+                        iconUrl = 'https://raw.githubusercontent.com/drestrepoj06/CGI-COP-WUR/refs/heads/stable/src/vec/ambulance_geofence.png';
+                    } else {
+                        iconUrl = isAvailable
+                            ? 'https://raw.githubusercontent.com/drestrepoj06/CGI-COP-WUR/refs/heads/main/src/vec/ambulance_available.png'
+                            : 'https://raw.githubusercontent.com/drestrepoj06/CGI-COP-WUR/refs/heads/main/src/vec/ambulance_unavailable.png';
+                    }
 
-                    const statusText = isAvailable ? 'Available' : 'Unavailable';
-                    const popupContent = `🚑 Ambulance ${id}<br/>⏰ ${formatTimestamp(timestamp)}<br/>Status: ${statusText}`;
+                    const isGoingToIncident = info.status === true;
+                    const ambulanceIcon = isGoingToIncident
+                        ? L.icon({
+                            iconUrl: iconUrl,
+                            iconSize: [26, 26],
+                            iconAnchor: [10, 10],
+                            popupAnchor: [0, -16]
+                        })
+                        : L.icon({
+                            iconUrl: iconUrl,
+                            iconSize: [36, 36],
+                            iconAnchor: [10, 10],
+                            popupAnchor: [0, -16]
+                        });
+                    const isAvailableForPopup = info.availability_status === true && info.status === true
+                    const statusText = isAvailableForPopup ? '✅ Status: Available' : '❌ Status: Unavailable';
+                    const popupContent = `🚑 Ambulance ${id}<br/>${statusText}`
 
                     if (!ambulanceMarkers[id]) {
                         ambulanceMarkers[id] = L.marker(latlng, { icon: ambulanceIcon })
@@ -330,60 +379,70 @@
             map.invalidateSize();
         }
 
+        // Code to display time in top right
+        function updateTimeDisplay(timestamp) {
+            if (!timestamp) return;
+
+            // Subtract 2 hours to match up to the other times
+            const adjustedTimestamp = timestamp - 7200000;
+
+            const date = new Date(adjustedTimestamp);
+            const timeString = date.toLocaleTimeString('en-GB', {
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+
+            const dateString = date.toLocaleDateString('en-GB', {
+                day: '2-digit',
+                month: 'short',
+                year: 'numeric'
+            });
+
+            document.getElementById('timeDisplay').innerHTML = `${dateString}, ${timeString}`;
+        }
+
         function initAmbulanceWebSocket() {
             const ambulanceSocket = new WebSocket("ws://localhost:8000/ws/scan");
-            // const ambuPathSocket = new WebSocket("ws://localhost:8000/ws/scan");
-
 
             let ambulanceData = [];
-            let ambuPathData = []; // 默认值为空数组，避免 undefined
+            let ambuPathData = []; //
 
             ambulanceSocket.onopen = () => {
-                ambulanceSocket.send(JSON.stringify({ collection: "ambulance" })); // 请求救护车数据
+                ambulanceSocket.send(JSON.stringify({ collection: "ambulance" }));
             };
-
-            // ambuPathSocket.onopen = () => {
-            //     ambuPathSocket.send(JSON.stringify({ collection: "ambu_path" })); // 请求路径数据
-            // };
 
             ambulanceSocket.onmessage = event => {
                 const data = JSON.parse(event.data);
                 console.log("🚑 Ambulance Data Received:", data);
 
                 if (data.collection === "ambulance") {
-                    ambulanceData = data.data || []; // 确保数据不为空
+                    ambulanceData = data.data || []; // Make sure the data is not empty
+                    // Code to display time in top right
+                    if (ambulanceData.length > 0) {
+                        const firstAmbulance = ambulanceData[0];
+                        try {
+                            const geojson = JSON.parse(firstAmbulance[1]);
+                            const timestamp = Number(geojson.coordinates[2]);
+                            updateTimeDisplay(timestamp);
+                        } catch (e) {
+                            console.error("Error parsing ambulance timestamp:", e);
+                        }
+                    }
                 }
 
-                // 调用 updateAmbulancePositions 时，确保 `ambuPathData` 为空时使用 `[]`
+                // When calling updateAmbulancePositions, make sure to use `[]` when `ambuPathData` is empty
                 updateAmbulancePositions(ambulanceData, ambuPathData || []);
             };
 
-            // ambuPathSocket.onmessage = event => {
-            //     const data = JSON.parse(event.data);
-            //     // console.log("🛣️ Ambulance Path Data Received:", data);
-
-            //     // 如果收到的数据不包含 `ambu_path`，就忽略更新
-            //     if (data.collection === "ambu_path") {
-            //         ambuPathData = data.data || []; // 确保数据不为空
-            //         updateAmbulancePositions(ambulanceData, ambuPathData);
-            //     } else {
-            //         console.warn("⚠️ 'ambu_path' collection not found, skipping update.");
-            //     }
-            // };
 
             ambulanceSocket.onerror = error => console.error("🚨 Ambulance WebSocket Error:", error);
-            // ambuPathSocket.onerror = error => console.error("🚨 Ambulance Path WebSocket Error:", error);
         }
-
-
 
         // Initialize both WebSocket connections
         initTrainWebSocket();
         initAmbulanceWebSocket();
 
-
-
-        let ambulancePolylines = []; // 全局变量，用于追踪当前渲染的路径
+        let ambulancePolylines = []; // holds { centerLine, innerLine }
 
         function drawAmbulanceRoutesFromTile38() {
             const socket = new WebSocket("ws://localhost:8000/ws/scan");
@@ -395,19 +454,17 @@
             socket.onmessage = (event) => {
                 try {
                     const data = JSON.parse(event.data);
+                    if (data.collection !== "ambu_path2train" || !Array.isArray(data.data)) return;
 
-                    if (data.collection !== "ambu_path2train" || !Array.isArray(data.data)) {
-                        console.warn("⚠️ Unexpected ambu_path2train data.");
-                        return;
-                    }
-
-                    // 清除旧有 polyline（地图上已存在的救护车轨迹）
-                    ambulancePolylines.forEach(polyline => map.removeLayer(polyline));
+                    // Remove old polylines
+                    ambulancePolylines.forEach(({ centerLine, innerLine }) => {
+                        map.removeLayer(centerLine);
+                        map.removeLayer(innerLine);
+                    });
                     ambulancePolylines = [];
 
                     data.data.forEach(item => {
                         const [id, geojsonStr, fieldArr] = item;
-
                         if (!Array.isArray(fieldArr) || fieldArr[0] !== "info") return;
 
                         let info;
@@ -423,36 +480,32 @@
 
                         const latlngs = points.map(p => [p.latitude, p.longitude]);
 
-                        const polyline = L.polyline(latlngs, {
-                            color: "red",
-                            weight: 8,
-                            opacity: 0.7
-                        }).addTo(map);
+                        const outerLine = L.polyline(latlngs, { color: "black", weight: 10, opacity: 1 }).addTo(map);
+                        const centerLine = L.polyline(latlngs, { color: "red", weight: 8, opacity: 1 }).addTo(map);
+                        const innerLine = L.polyline(latlngs, { color: "white", weight: 3, opacity: 1 }).addTo(map);
 
-                        // 保存到追踪数组
-                        ambulancePolylines.push(polyline);
-
-                        // 设置闪烁颜色切换
-                        let isRed = true;
-                        setInterval(() => {
-                            const color = isRed ? "yellow" : "red";
-                            polyline.setStyle({ color });
-                            isRed = !isRed;
-                        }, 500);
-
-                        polyline.bindPopup(`🚑 Ambulance ${info.ambulance_id || id}`);
+                        ambulancePolylines.push({ centerLine, innerLine });
                     });
                 } catch (err) {
                     console.error("🚨 Failed to render ambu_path2train:", err);
                 }
             };
-
-            socket.onerror = (err) => {
-                console.error("🚨 WebSocket error (ambu_path2train):", err);
-            };
         }
 
-
+        // Global blinking toggle
+        let isRed = true;
+        setInterval(() => {
+            ambulancePolylines.forEach(({ centerLine, innerLine }) => {
+                if (isRed) {
+                    centerLine.setStyle({ color: "white" });
+                    innerLine.setStyle({ color: "red" });
+                } else {
+                    centerLine.setStyle({ color: "red" });
+                    innerLine.setStyle({ color: "white" });
+                }
+            });
+            isRed = !isRed;
+        }, 500);
 
 
         drawAmbulanceRoutesFromTile38();
@@ -524,10 +577,58 @@
             });
         }
 
-
-
         // railsegmentWebSocket();
 
+
+        function drawGeofenceSegments() {
+            const socket = new WebSocket("ws://localhost:8000/ws/scan_filter");
+
+            socket.onopen = () => {
+                socket.send(JSON.stringify({ collection: "geofence_seg" }));
+            };
+
+            socket.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    if (data.collection !== "geofence_seg" || !Array.isArray(data.data)) return;
+
+                    data.data.forEach(item => {
+                        const [id, geojsonStr, fieldArr] = item;
+                        if (!Array.isArray(fieldArr) || fieldArr[0] !== "info") return;
+
+                        let info, geojson;
+                        try {
+                            info = JSON.parse(fieldArr[1]);
+                            geojson = JSON.parse(geojsonStr);
+                        } catch (err) {
+                            console.warn(`⚠️ Parse error for ${id}:`, err);
+                            return;
+                        }
+
+                        const distance = info.distance_from_train;
+                        if (typeof distance !== "number") return;
+
+                        const coords = geojson.coordinates;
+                        const formattedCoords = coords.map(ring =>
+                            ring.map(([lon, lat]) => [lat, lon])
+                        );
+
+                        const fillColor = distance <= 400 ? "#FF6666" : "#FFD966"; // Light red or yellow
+
+                        L.polygon(formattedCoords, {
+                            color: fillColor,
+                            fillColor: fillColor,
+                            weight: 2,
+                            fillOpacity: 0.3
+                        }).addTo(map);
+                    });
+                } catch (err) {
+                    console.error("🚨 Failed to render geofence_seg polygons:", err);
+                }
+            };
+        }
+
+        drawGeofenceSegments();
 
     </script>
 </body>

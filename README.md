@@ -1,3 +1,14 @@
+1. change train/ambu icons in geofence area (Jhon, done).
+2. solve problems with create incident button and resolve button. (Falco, done)
+3. Severity of geofence rail segment and assign different colors based on that.
+4. Put the scale bar in the map (Thijs, done)
+5. Add estimated resolving time, incident info (train index). (Xiaolu, done)
+6. Release the ambus after resolve.
+7. Add function that iterates through keys from tomtom. (Falco, done)
+8. Add a virtual clock based on average time of the train and ambulance. (Thijs)
+
+
+
 # 🚆 RCOP ![Python](https://img.shields.io/badge/Python-3.12-green?logo=python)![Docker](https://img.shields.io/badge/Docker-Compose-blue?logo=docker)![License](https://img.shields.io/badge/License-GPL-green)
 
 <div align="center">
@@ -9,6 +20,7 @@ Welcome to **RCOP**, a powerful tool for monitoring the accident response operat
 RCOP is an open source Rail Common Operation Picture toolbox based on a series of open source data-handling tools. You can also consider this a minimal integration of traffic monitoring dashboard built on [Apache Kafka](https://kafka.apache.org/), [TIle38](https://tile38.com/), [Streamlit](https://streamlit.io/), [Mapbox](https://www.mapbox.com/). 
 
 ## 🛠 Installation
+
 
 Follow these simple steps to set up the system:
 
@@ -25,7 +37,7 @@ Follow these simple steps to set up the system:
   docker compose up
   ```
 
-🚀 Then open localhost:8501 to start monitoring the lovely Railway Station **Utrecht Centraal**.
+🚀 Then open localhost:8501 to start monitoring the lovely Railway Sytem of **Utrecht**.
 
 ## 🤝 Contributors
 

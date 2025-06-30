@@ -6,18 +6,17 @@ from geopy.distance import geodesic
 
 API_KEY = "43846b8fddcf4e2bb41def8291de6bf4"
 CENTER = (52.094040, 5.093102)
-MAX_DIST_km = 6.150
+MAX_DIST_km = 8
 
 headers = {
     "Ocp-Apim-Subscription-Key": API_KEY
 }
 SAVE_PATH = "train_logs.json"
-duration_minutes = 10
+duration_minutes = 60
 interval_seconds = 5
 end_time = time.time() + duration_minutes * 60
 
 all_data = []
-
 
 def is_within_radius(train):
     coords = train.get("lat"), train.get("lng")

@@ -3,13 +3,13 @@ import asyncio
 import redis
 import logging
 import requests
+from itertools import cycle
 
 logger = logging.getLogger("uvicorn")
 client = redis.Redis(host="tile38", port=9851, decode_responses=True)
 
 
 def clear_ambu_path_and_broken_train(client):
-    """清空 ambu_path2train 和 broken_train 集合"""
     try:
         client.execute_command("DROP", "ambu_path2train")
         logging.info("✅ Cleared ambu_path2train collection.")
@@ -21,44 +21,6 @@ def clear_ambu_path_and_broken_train(client):
     except Exception as e:
         logging.error(f"❌ Failed to clear collections: {e}")
         return "fail"
-
-
-# def fetch_ambulance_positions():
-#     """
-#     Fetches ambulance location data and returns only ID and coordinates.
-
-#     Returns:
-#     - List[dict]: A list of dictionaries containing only ambulance ID and coordinates.
-#     """
-#     positions = []
-#     try:
-#         cursor, response = client.execute_command("SCAN", "ambulance")
-#         if not response or not isinstance(response, list) or len(response) < 2:
-#             logger.error(f"Ambulance data not found: {response}")
-#             return positions
-
-#         for obj in response:  # The actual object list
-#             logging.info(f"obj: {obj}")
-#             try:
-#                 ambu_info = json.loads(obj[2][1])  # Ambulance ID (序号)
-#                 ambu_id = ambu_info.get("vehicle_number", [])
-#                 geojson_obj = json.loads(obj[1])  # 解析为 JSON
-#                 coords = geojson_obj.get("coordinates", [])
-
-#                 if len(coords) < 2:
-#                     continue
-
-#                 positions.append({
-#                     "id": ambu_id,
-#                     "lat": coords[1],
-#                     "lng": coords[0]
-#                 })
-#             except Exception as e:
-#                 logger.error(f"Error parsing object {obj}: {e}")
-#     except Exception as e:
-#         logger.error(f"SCAN `ambulance` failed: {e}")
-
-#     return positions
 
 
 def fetch_ambulance_positions():
@@ -141,40 +103,25 @@ def fetch_broken_trains():
     return broken_trains
 
 
-# async def fetch_ambu_broken_train_positions(websocket=None):
-#     """
-#     Fetches raw ambulance and broken train data without parsing.
+# DO NOT READ THIS❗
+# VERY TOP SECRET LIST❗
+TOMTOM_API_KEY_LIST = [
+    "DJfZGAsAfoE8Nsb6KaOZ1UHXlU7z9sR5",
+    "fGPPGPPeZr5bWeBJke1HopjWnkFpk8En",
+    "YjyodVbTYnjdjl3JSUzoug3XwpQNuLYi",
+    "vsYoRZiUUGpAvPgLZoehtfQ3mlIVCkwv",
+    "btm27pOSiKOd9tq5EHQvJdsdqj4X4q0C",
+    "JFmPPMpbDhq3WVWuP9494g30V7IyMT6b"
+]
 
-#     Parameters:
-#     - websocket (WebSocket, optional): If provided, sends the data via WebSocket.
-
-#     Returns:
-#     - dict: Raw JSON response from Redis.
-#     """
-#     response_data = {
-#         "ambulance": fetch_ambulance_positions(),
-#         "broken_trains": fetch_broken_trains(),
-#     }
-
-#     if websocket:
-#         try:
-#             await websocket.send_text(json.dumps(response_data))
-#         except Exception as e:
-#             logger.error(f"[ERROR] WebSocket transmission error: {e}")
-#             await websocket.close()
-
-#     return response_data
-
-TOMTOM_API_KEY = "YjyodVbTYnjdjl3JSUzoug3XwpQNuLYi"
-# btm27pOSiKOd9tq5EHQvJdsdqj4X4q0C
-# DJfZGAsAfoE8Nsb6KaOZ1UHXlU7z9sR5
-
+API_KEY_ITERATOR = cycle(TOMTOM_API_KEY_LIST)
 
 def get_route(origin, destination):
+    NEXT_API_KEY = next(API_KEY_ITERATOR)
     url = (
         f"https://api.tomtom.com/routing/1/calculateRoute/"
         f"{origin[0]},{origin[1]}:{destination[0]},{destination[1]}/json"
-        f"?key={TOMTOM_API_KEY}&travelMode=car&routeType=fastest"
+        f"?key={NEXT_API_KEY}&travelMode=car&routeType=fastest"
     )
     try:
         r = requests.get(url)
@@ -189,14 +136,14 @@ async def calculate_optimal_path(positions):
     if not positions["broken_trains"]:
         return {}
 
-    # 找出时间戳最大的故障列车
+    # Find the faulty train with the largest timestamp
     broken_trains = positions["broken_trains"]
 
-    # 如果只有一条记录，就直接使用它；否则，用 max 找出时间戳最大的记录
+    # If there is only one record, use it directly; otherwise, use max to find the record with the largest timestamp.
     latest_train = broken_trains[0] if len(broken_trains) == 1 else max(
         broken_trains, key=lambda t: t["timestamp"])
 
-    # 计算每辆救护车到该故障列车的路径
+    # Calculate the path from each ambulance to the faulty train
     ambulance_routes = [
         {
             "timestamp": latest_train["timestamp"],
@@ -211,23 +158,3 @@ async def calculate_optimal_path(positions):
         ambulance_routes, key=lambda r: r["route_estimated_time"])
 
     return optimal_route
-
-
-# def fetch_and_display_positions():
-#     """
-
-#     Fetch ambulance and broken train positions and display them in the dashboard.
-#     """
-#     positions = fetch_ambu_broken_train_positions()
-#     routes = calculate_optimal_path(positions)
-
-#     st.json(routes)  # Display the fetched data in JSON format
-
-# async def delayed_fetch():
-#     """等待 2 秒后执行 fetch_and_display_positions"""
-#     await asyncio.sleep(2)
-#     await fetch_and_display_positions()
-
-
-#         # Fetch and display positions below the map
-#         asyncio.run(delayed_fetch())

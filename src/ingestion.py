@@ -33,7 +33,6 @@ if __name__ == "__main__":
 
     logging.info("Producer and Consumer threads started. Press Ctrl+C to exit.")
 
-    # Keep the main thread running to allow background threads to do their work
     try:
         while True:
             time.sleep(1)
