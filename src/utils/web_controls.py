@@ -1,10 +1,10 @@
 import streamlit as st
-from datetime import datetime
 import logging
 from websocket_server import mark_random_train_as_inactive, reset_all_trains
 import redis
 import time
 
+from datetime import datetime
 from utils.navigate import clear_ambu_path_and_broken_train
 from consumer import process_broken_trains_and_assign_ambulances
 
@@ -87,7 +87,8 @@ def display_button_succes_messages():
 
 
 def display_incident_summary():
-    if st.session_state['button_states'].get('show_incident') and st.session_state.get('incident_data'):
+    if (st.session_state['button_states'].get('show_incident') and st.session_state.get('incident_data')):
+        st.markdown("#### Latest Incident Summary")
         incident = st.session_state['incident_data']
         coords = incident.get("location", {}).get("coordinates", [0, 0, 0])
         lng, lat, timestamp = coords[0], coords[1], int(
@@ -95,15 +96,26 @@ def display_incident_summary():
         readable_time = datetime.utcfromtimestamp(
             timestamp / 1000).strftime('%Y-%m-%d %H:%M:%S')
 
-        st.markdown(f"""
-        ##### 🚨 Incident occured!
-        - **Train ID**: {incident.get('train_id')}
-        - **Location**: {lat}, {lng}  
-        - **Timestamp**: {readable_time} UTC  
-        - **Passengers Affected**: {incident.get('affected_passengers')}  
-        - **Ambulance Units Required**: {incident.get('ambulance_units')}  
-        - **Technical Resources Required**: {incident.get('technical_resources', 'N/A').capitalize()}
-        """)
+        box_color = "#ffc7bf"
+
+        with st.container():
+            st.markdown(f"""
+            <div style="
+                background-color: {box_color};
+                border-left: 6px solid #ff6f61;
+                padding: 15px;
+                margin-bottom: 25px;
+                border-radius: 8px;
+                color: black;
+            ">
+            <h4>🚨 Incident occured!</h4>            
+            🚅 <b>Train ID:</b> {incident.get('train_id')}<br>
+            📍 <b>Location:</b> {lat}, {lng}<br>
+            👥 <b>Passengers affected:</b> {incident.get('affected_passengers')}<br>
+            🚑 <b>Ambulance Unites Required</b> {incident.get('ambulance_units')}<br>
+            🛠️ <b>Technical Resources Required:</b> {incident.get('technical_resources', 'N/A').capitalize()}<br>
+            """,
+            unsafe_allow_html=True)
 
 
 def display_ambulance_alerts():
