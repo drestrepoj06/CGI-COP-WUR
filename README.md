@@ -6,7 +6,7 @@
 
 Welcome to **RCOP**, a powerful tool for monitoring the accident response operations at Utrecht Centraal Railway Station in simulation.
 
-RCOP is an open source Rail Common Operation Picture toolbox based on a series of open source data-handling tools. You can also consider this a minimal integration of traffic monitoring dashboard built on [Apache Kafka](https://kafka.apache.org/), [TIle38](https://tile38.com/), [WebSocket](https://websocket.org/guides/websocket-protocol/), [Redis](https://redis.io/), [FastAPI](https://fastapi.tiangolo.com/), and [Streamlit](https://streamlit.io/). 
+RCOP is an open source Rail Common Operation Picture toolbox based on a series of open source data-handling tools. You can also consider this a minimal integration of traffic monitoring dashboard built on [Apache Kafka](https://kafka.apache.org/), [TIle38](https://tile38.com/), [Redis](https://redis.io/), [WebSocket](https://websocket.org/guides/websocket-protocol/), [FastAPI](https://fastapi.tiangolo.com/), and [Streamlit](https://streamlit.io/). 
 
 ## 🛠 Installation
 
