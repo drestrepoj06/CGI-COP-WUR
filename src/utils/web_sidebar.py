@@ -5,23 +5,61 @@ import requests
 import base64
 
 
-def get_encoded_logo(url):
-    response = requests.get(url)
-    if response.status_code == 200:
-        return base64.b64encode(response.content).decode()
-    else:
+# def get_encoded_logo(url):
+#     response = requests.get(url)
+#     if response.status_code == 200:
+#         return base64.b64encode(response.content).decode()
+#     else:
+#         return None
+
+
+# def add_logo():
+#     url1 = "https://raw.githubusercontent.com/drestrepoj06/CGI-COP-WUR/main/src/vec/CGI_logo.png"
+#     url2 = "https://raw.githubusercontent.com/drestrepoj06/CGI-COP-WUR/main/src/vec/WUR_RGB_standard_2021.png"
+
+#     link1 = "https://www.cgi.com/nl/nl"
+#     link2 = "https://www.wur.nl/"
+
+#     encoded1 = get_encoded_logo(url1)
+#     encoded2 = get_encoded_logo(url2)
+
+#     if encoded1 and encoded2:
+#         st.markdown(
+#             f"""
+#             <div style="text-align: center; padding: 20px 0;">
+#                 <a href="{link1}" target="_blank">
+#                     <img src="data:image/png;base64,{encoded1}" style="height: 50px;">
+#                 </a><br><br>
+#                 <a href="{link2}" target="_blank">
+#                     <img src="data:image/png;base64,{encoded2}" style="height: 80px;">
+#                 </a>
+#             </div>
+#             """,
+#             unsafe_allow_html=True
+#         )
+#     else:
+#         st.error("Failed to load one or both logos.")
+
+
+
+def get_encoded_logo_from_file(filepath):
+    try:
+        with open(filepath, "rb") as img_file:
+            return base64.b64encode(img_file.read()).decode()
+    except Exception as e:
+        st.error(f"Failed to read image file: {e}")
         return None
 
-
 def add_logo():
-    url1 = "https://raw.githubusercontent.com/drestrepoj06/CGI-COP-WUR/main/src/vec/CGI_logo.png"
-    url2 = "https://raw.githubusercontent.com/drestrepoj06/CGI-COP-WUR/main/src/vec/WUR_RGB_standard_2021.png"
+    # 本地路径
+    path1 = "vec/CGI_logo.png"
+    path2 = "vec/WUR_RGB_standard_2021.png"
 
     link1 = "https://www.cgi.com/nl/nl"
     link2 = "https://www.wur.nl/"
 
-    encoded1 = get_encoded_logo(url1)
-    encoded2 = get_encoded_logo(url2)
+    encoded1 = get_encoded_logo_from_file(path1)
+    encoded2 = get_encoded_logo_from_file(path2)
 
     if encoded1 and encoded2:
         st.markdown(
@@ -38,8 +76,7 @@ def add_logo():
             unsafe_allow_html=True
         )
     else:
-        st.error("Failed to load one or both logos.")
-
+        st.error("❌ Failed to load one or both logos.")
 
 def render_sidebar():
     st.title("RCOP Railway Operations Center for Meldkamer Spoor")

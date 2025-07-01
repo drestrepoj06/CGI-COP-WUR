@@ -4,6 +4,8 @@ from websocket_server import mark_random_train_as_inactive, reset_all_trains
 import redis
 import time
 
+import streamlit.components.v1 as components
+
 from utils.navigate import clear_ambu_path_and_broken_train
 from consumer import process_broken_trains_and_assign_ambulances
 from datetime import datetime
@@ -70,7 +72,13 @@ def display_reset_button():
             st.session_state['button_states']['show_reset_success'] = True
             st.session_state["tqdm"] = False
 
-            st.rerun()
+            # 👉 加入真·刷新页面功能
+            components.html(
+                """<script>
+                    window.location.reload();
+                </script>""",
+                height=0,
+            )
         except Exception as e:
             logging.error(f"Failed to reset trains: {e}")
             st.error("An error occurred while resetting trains.")
