@@ -255,26 +255,6 @@ def startup_event():
     start_geofence_listener()
 
 
-# def start_geofence_listener():
-#     def listen():
-#         # Create a new event loop for this thread
-#         new_loop = asyncio.new_event_loop()
-#         asyncio.set_event_loop(new_loop)
-
-#         pubsub = client.pubsub()  # ✅ use Tile38 client
-#         pubsub.psubscribe("train_alert_zone", "ambulance_alert_zone")
-#         logger.info(
-#             "🛰️ Tile38 geofence listener started and subscribed to *_alert_zone channels")
-
-#         for message in pubsub.listen():
-#             logger.info(f"📨 PubSub message received: {message}")
-#             if message["type"] == "pmessage":
-#                 handle_geofence_message(message)
-
-#     thread = threading.Thread(target=listen, daemon=True)
-#     thread.start()
-
-
 def start_geofence_listener():
     def listen():
         new_loop = asyncio.new_event_loop()
@@ -311,9 +291,6 @@ def handle_geofence_message(message):
         if isinstance(channel, bytes):
             channel = channel.decode()
 
-        # match = re.match(r"(train|ambulance)_alert_zone", channel)
-        # collection = match.group(1) if match else None
-
         match = re.match(r"(train|ambulance)_alert_zone_(\d+)", channel)
         collection = match.group(1) if match else None
         incident_id = match.group(2) if match else None
@@ -348,22 +325,6 @@ def handle_geofence_message(message):
         entity_type = collection.capitalize()
 
         message_text = None
-
-        # if event == "enter":
-        #     redis_client.sadd(inside_set_key, entity_id)
-        #     redis_client.srem(inside_once_key, entity_id)
-        #     message_text = f"{entity_type} {entity_id} entered the geofenced area."
-
-        # elif event == "inside":
-        #     redis_client.sadd(inside_set_key, entity_id)
-        #     if not redis_client.sismember(inside_once_key, entity_id):
-        #         redis_client.sadd(inside_once_key, entity_id)
-        #         message_text = f"{entity_type} {entity_id} is inside the geofenced area."
-
-        # elif event == "exit":
-        #     redis_client.srem(inside_set_key, entity_id)
-        #     redis_client.srem(inside_once_key, entity_id)
-        #     message_text = f"{entity_type} {entity_id} exited the geofenced area."
 
         if event == "enter":
             redis_client.sadd(inside_set_key, entity_id)
@@ -736,7 +697,7 @@ def reset_all_trains(client):
                     fields_data = {}
 
                     if len(rail_get[1]) >= 2:
-                        fields_data = {rail_get[1][0]                            : json.loads(rail_get[1][1])}
+                        fields_data = {rail_get[1][0]: json.loads(rail_get[1][1])}
 
                     if "info" in fields_data and isinstance(fields_data["info"], dict):
                         fields_data["info"]["status"] = True
@@ -811,11 +772,17 @@ def reset_all_trains(client):
 
         client.execute_command("DROP", "geofence_seg")
 
+        # client.execute_command("DROP", "train_inside_once")
+        # client.execute_command("DROP", "ambulance_inside_once")
+
         global global_merged_geojson
         global_merged_geojson = None
 
         redis_client.delete("train_alerts")
         redis_client.delete("ambulance_alerts")
+
+        redis_client.delete("train_inside_once")
+        redis_client.delete("ambulance_inside_once")
         logging.info(
             "✅ All trains reset to active status and incidents cleared!")
         return "success"
@@ -902,7 +869,6 @@ async def scan_websocket(websocket: WebSocket):
         await websocket.close()
 
 
-
 @app.websocket("/ws/scan_filter")
 async def scan_websocket_filter(websocket: WebSocket):
     await websocket.accept()
@@ -950,10 +916,12 @@ async def scan_websocket_filter(websocket: WebSocket):
 
                     redis_key = f"{collection}:{entity_id}"
                     in_geo_raw = redis_client.hget(redis_key, "in_geofence")
-                    in_geofence = json.loads(in_geo_raw) if in_geo_raw else False
+                    in_geofence = json.loads(
+                        in_geo_raw) if in_geo_raw else False
                     fields["in_geofence"] = in_geofence
 
-                    record_hash = json.dumps({"geom": geom, "fields": fields}, sort_keys=True)
+                    record_hash = json.dumps(
+                        {"geom": geom, "fields": fields}, sort_keys=True)
                     current_snapshot[entity_id] = record_hash
 
                     # 🔁 Compare with previous snapshot
