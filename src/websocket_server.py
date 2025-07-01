@@ -592,7 +592,6 @@ def create_incident(client, train_id, location, description="Incident reported",
         "moderate": [
             "Injuries while boarding",
             "Passengers fainted",
-            "Small fire and burnt passengers"
         ],
         "high": [
             "Passengers showing signs of stroke",
