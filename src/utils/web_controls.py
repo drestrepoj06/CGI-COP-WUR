@@ -120,7 +120,7 @@ def display_incident_summary():
             🚅 <b>Train ID:</b> {incident.get('train_id')}<br>
             📍 <b>Location:</b> {lat}, {lng}<br>
             👥 <b>Passengers affected:</b> {incident.get('affected_passengers')}<br>
-            🚑 <b>Ambulance Unites Required</b> {incident.get('ambulance_units')}<br>
+            🚑 <b>Ambulance Units Required</b> {incident.get('ambulance_units')}<br>
             🛠️ <b>Technical Resources Required:</b> {incident.get('technical_resources', 'N/A').capitalize()}<br>
             """,
             unsafe_allow_html=True)
